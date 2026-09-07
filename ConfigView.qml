@@ -205,15 +205,13 @@ ColumnLayout {
           Button {
             text: "Add profiles…"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: hovered
-            ToolTip.text: "Copy .ovpn files of your own into the profile directory."
             onClicked: if (cfg.service) cfg.service.browseForProfiles()
           }
 
           Button {
             text: "Refresh profiles"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: hovered
+            ToolTip.visible: cfg.visible && hovered
             ToolTip.text: "Download FastestVPN's current .ovpn bundle into the\n"
                         + "profile directory. Downloads only — connects to nothing."
             onClicked: if (cfg.service) cfg.service.fetchProfiles()
@@ -245,7 +243,7 @@ ColumnLayout {
           Button {
             text: "Import profiles"
             enabled: cfg.service && cfg.service.configured && !cfg.service.updating
-            ToolTip.visible: hovered
+            ToolTip.visible: cfg.visible && hovered
             ToolTip.text: "Create a NetworkManager connection for each profile.\n"
                         + "Asks for your password once — this is the only step\n"
                         + "that needs administrator rights."
@@ -292,7 +290,7 @@ ColumnLayout {
           Button {
             text: "Locate new"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: hovered
+            ToolTip.visible: cfg.visible && hovered
             ToolTip.text: "Look up where each new endpoint's server is.\n"
                         + "Runs automatically after an import."
             onClicked: if (cfg.service) cfg.service.geolocate(false)
@@ -301,7 +299,7 @@ ColumnLayout {
           Button {
             text: "Re-locate all"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: hovered
+            ToolTip.visible: cfg.visible && hovered
             ToolTip.text: "Look every endpoint up again, even ones already known."
             onClicked: if (cfg.service) cfg.service.geolocate(true)
           }
@@ -351,7 +349,7 @@ ColumnLayout {
           Button {
             text: "Clear all"
             enabled: cfg.service && cfg.service.unavailableCount > 0
-            ToolTip.visible: hovered
+            ToolTip.visible: cfg.visible && hovered
             ToolTip.text: "Forget every recorded failure and let them all be tried again."
             onClicked: {
               if (!cfg.service) return

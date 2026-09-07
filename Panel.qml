@@ -421,7 +421,7 @@ Panel {
             if (v.result === "ok") return "Connected successfully last time" + when
             return ""
           }
-          ToolTip.visible: infoHover.hovered && row.verdictText !== ""
+          ToolTip.visible: !root.configOpen && infoHover.hovered && row.verdictText !== ""
           ToolTip.text: row.verdictText
           ToolTip.delay: 400
 
