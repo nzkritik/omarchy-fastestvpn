@@ -79,17 +79,6 @@ endpoint to find out where it is. One lookup is made per unique IP rather than
 per file, so 134 profiles cost about 64 of the API's 1000 free daily calls, and
 it only looks up what it does not already know.
 
-Where an entry was previously measured by connecting and reading the real exit
-address, that measurement wins over the IP lookup: the lookup says where you
-*enter* the network, a real connection says where you *appear*, and those differ
-for virtual and double-hop locations.
-
-The catalogue used to carry probe results and measurement provenance
-(`status`, `reachable`, `host`, `verified`, `measured*`, `site*` and others)
-from an earlier design that tested endpoints in the background. Nothing read
-them any more, so they are gone; earlier revisions are in git history if the
-raw measurements are ever wanted again.
-
 ## Tools
 
     bin/fvpn-fetch-profiles     # download the bundle into the profile directory
