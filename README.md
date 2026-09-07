@@ -85,9 +85,11 @@ address, that measurement wins over the IP lookup: the lookup says where you
 *enter* the network, a real connection says where you *appear*, and those differ
 for virtual and double-hop locations.
 
-Some catalogue fields (`status`, `reachable`, `complete`) are left over from an
-earlier design that probed endpoints in the background. They are informational
-only and gate nothing.
+The catalogue used to carry probe results and measurement provenance
+(`status`, `reachable`, `host`, `verified`, `measured*`, `site*` and others)
+from an earlier design that tested endpoints in the background. Nothing read
+them any more, so they are gone; earlier revisions are in git history if the
+raw measurements are ever wanted again.
 
 ## Tools
 

@@ -1,661 +1,191 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "provider": "FastestVPN",
   "generated": "2026-09-05",
-  "notes": "Coordinates are the exit location (where you appear to the internet). precision=city means the city is named by the profile or hostname; precision=country means only the country is known and the coordinates are that country's primary hosting city, a reasonable guess rather than a measured fact. Entries with `via` are double-hop: `via` is the entry node actually dialled, taken from the server hostname. precision=measured means the exit location was observed directly by connecting and geolocating the exit IP. `reachable` records a TCP probe of the profile's own host:port on 2026-09-05; false means the endpoint did not answer.",
+  "notes": "Labels and coordinates only. Availability comes from real connect attempts (~/.local/state/fastestvpn/endpoints.json); positions are filled in by bin/fvpn-geolocate. Earlier revisions of this file carried probe results and measurement provenance \u2014 see git history.",
   "locations": [
     {
       "id": "australia-stream",
-      "connection": "fvpn-australia-stream",
       "label": "Australia (Streaming)",
       "country": "Australia",
       "countryCode": "AU",
       "city": "Sydney",
       "latitude": -33.8688,
       "longitude": 151.2093,
-      "precision": "country",
-      "host": "au-stream.jumptoserver.com",
-      "variantOf": "australia1",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Australia",
-      "siteCity": "Sydney",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "au-stream.jumptoserver.com",
-        "seconds": 60
-      }
+      "precision": "country"
     },
     {
       "id": "australia1",
-      "connection": "fvpn-australia1",
       "label": "Australia",
       "country": "Australia",
       "countryCode": "AU",
       "city": "Sydney",
       "latitude": -33.8688,
       "longitude": 151.2093,
-      "precision": "country",
-      "host": "auau.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Australia",
-      "siteCity": "Sydney",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "auau.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "austria-stream",
-      "connection": "fvpn-austria-stream",
       "label": "Austria (Streaming)",
       "country": "Austria",
       "countryCode": "AT",
       "city": "Vienna",
       "latitude": 48.2082,
       "longitude": 16.3738,
-      "precision": "country",
-      "host": "at-stream.jumptoserver.com",
-      "variantOf": "austria1",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "unreachable",
-      "siteListed": false,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "at-stream.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "austria1",
-      "connection": "fvpn-austria1",
       "label": "Austria",
       "country": "Austria",
       "countryCode": "AT",
       "city": "Wien",
       "latitude": 48.2082,
       "longitude": 16.3738,
-      "precision": "country",
-      "host": "at-01.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Austria",
-      "siteCity": "Wien",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "at-01.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "belgium-stream",
-      "connection": "fvpn-belgium-stream",
       "label": "Belgium (Streaming)",
       "country": "Belgium",
       "countryCode": "BE",
       "city": "Gouvy",
       "latitude": 50.226,
       "longitude": 5.9112,
-      "precision": "measured",
-      "host": "bel-stream.jumptoserver.com",
-      "variantOf": "belgium1",
-      "measuredIp": "217.136.173.96",
-      "measuredOrg": "Proximus",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "complete",
-      "ip": "193.9.114.210",
-      "geoChecked": true,
-      "measuredCountryCode": "BE",
-      "measuredCity": "Gouvy",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Belgium",
-      "siteCity": "Brussels",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 4
-      }
+      "precision": "measured"
     },
     {
       "id": "belgium1",
-      "connection": "fvpn-belgium1",
       "label": "Belgium",
       "country": "Belgium",
       "countryCode": "BE",
       "city": "Villers-Deux-\u00c9glises",
       "latitude": 50.1906,
       "longitude": 4.4791,
-      "precision": "measured",
-      "host": "bel-01.jumptoserver.com",
-      "measuredIp": "91.86.139.69",
-      "measuredOrg": "Mobistar Cable",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "193.9.114.210",
-      "geoChecked": true,
-      "measuredCountryCode": "BE",
-      "measuredCity": "Villers-Deux-\u00c9glises",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Belgium",
-      "siteCity": "Brussel",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 4
-      }
+      "precision": "measured"
     },
     {
       "id": "br-04",
-      "connection": "fvpn-br-04",
       "label": "Br-04",
       "country": "Brazil",
       "countryCode": "",
       "city": "S\u00e3o Paulo",
       "latitude": -23.5475,
       "longitude": -46.6361,
-      "precision": "server",
-      "host": "br-04.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp"
-      ],
-      "kind": "standard",
-      "generated": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "TCP"
-      ],
-      "status": "auth-rejected",
-      "ip": "185.192.124.75",
-      "reachable": true,
-      "measuredCountryCode": "BR",
-      "measuredCity": "S\u00e3o Paulo",
-      "serverOrg": "AS136258 BrainStorm Network, Inc",
-      "geoChecked": true,
-      "verified": {
-        "result": "auth-rejected",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "br-04.jumptoserver.com",
-        "note": "AUTH_FAILED on two separate attempts while other endpoints connected"
-      }
+      "precision": "server"
     },
     {
       "id": "brazil",
-      "connection": "fvpn-brazil",
       "label": "Brazil",
       "country": "Brazil",
       "countryCode": "BR",
       "city": "S\u00e3o Paulo",
       "latitude": -23.5475,
       "longitude": -46.6361,
-      "precision": "server",
-      "host": "br-03.jumptoserver.com",
-      "reachable": true,
-      "geoChecked": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "185.192.124.77",
-      "serverOrg": "AS136258 BrainStorm Network, Inc",
-      "measuredCountryCode": "BR",
-      "measuredCity": "S\u00e3o Paulo",
-      "siteListed": true,
-      "siteProtocols": [
-        "UDP"
-      ],
-      "siteCountry": "Brazil"
+      "precision": "server"
     },
     {
       "id": "bulgaria",
-      "connection": "fvpn-bulgaria",
       "label": "Bulgaria",
       "country": "Bulgaria",
       "countryCode": "BG",
       "city": "Sofia",
       "latitude": 42.6975,
       "longitude": 23.3241,
-      "precision": "measured",
-      "host": "bg-01.jumptoserver.com",
-      "measuredIp": "217.138.221.130",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "217.138.221.130",
-      "geoChecked": true,
-      "measuredCountryCode": "BG",
-      "measuredCity": "Sofia",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Bulgaria",
-      "siteCity": "Sofia"
+      "precision": "measured"
     },
     {
       "id": "ca-mnt2",
-      "connection": "fvpn-ca-mnt2",
       "label": "Ca-Mnt2",
       "country": "Canada",
       "countryCode": "",
       "city": "Montreal",
       "latitude": null,
       "longitude": null,
-      "precision": null,
-      "host": "ca-mnt2.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "udp",
-        "tcp"
-      ],
-      "kind": "standard",
-      "generated": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "status": "unreachable",
-      "ip": "89.238.156.163",
-      "reachable": false,
-      "geoChecked": true,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "ca-mnt2.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": null
     },
     {
       "id": "canada-stream",
-      "connection": "fvpn-canada-stream",
       "label": "Canada (Streaming)",
       "country": "Canada",
       "countryCode": "CA",
       "city": "Montr\u00e9al",
       "latitude": 45.5088,
       "longitude": -73.5878,
-      "precision": "measured",
-      "host": "ca-stream.jumptoserver.com",
-      "variantOf": "canada1",
-      "measuredIp": "5.181.233.123",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "complete",
-      "ip": "5.181.233.123",
-      "geoChecked": true,
-      "measuredCountryCode": "CA",
-      "measuredCity": "Montr\u00e9al",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Canada",
-      "siteCity": "Montreal"
+      "precision": "measured"
     },
     {
       "id": "canada1",
-      "connection": "fvpn-canada1",
       "label": "Canada",
       "country": "Canada",
       "countryCode": "CA",
       "city": "Montr\u00e9al",
       "latitude": 45.5088,
       "longitude": -73.5878,
-      "precision": "measured",
-      "host": "ca-01.jumptoserver.com",
-      "measuredIp": "5.181.233.122",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "5.181.233.122",
-      "geoChecked": true,
-      "measuredCountryCode": "CA",
-      "measuredCity": "Montr\u00e9al",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Canada",
-      "siteCity": "Montreal"
+      "precision": "measured"
     },
     {
       "id": "colombia",
-      "connection": "fvpn-colombia",
       "label": "Colombia",
       "country": "Colombia",
       "countryCode": "CO",
       "city": "Barrio San Luis",
       "latitude": 4.6678,
       "longitude": -74.0215,
-      "precision": "measured",
-      "host": "clmb.jumptoserver.com",
-      "measuredIp": "146.70.136.11",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.136.11",
-      "geoChecked": true,
-      "measuredCountryCode": "CO",
-      "measuredCity": "Barrio San Luis",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Colombia",
-      "siteCity": "Bogota"
+      "precision": "measured"
     },
     {
       "id": "czechia",
-      "connection": "fvpn-czechia",
       "label": "Czechia",
       "country": "Czechia",
       "countryCode": "CZ",
       "city": "Prague",
       "latitude": 50.088,
       "longitude": 14.4208,
-      "precision": "measured",
-      "host": "cz-01.jumptoserver.com",
-      "measuredIp": "45.84.122.154",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "45.84.122.154",
-      "geoChecked": true,
-      "measuredCountryCode": "CZ",
-      "measuredCity": "Prague",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Czech Republic",
-      "siteCity": "Prague"
+      "precision": "measured"
     },
     {
       "id": "denmark",
-      "connection": "fvpn-denmark",
       "label": "Denmark",
       "country": "Denmark",
       "countryCode": "DK",
       "city": "Copenhagen",
       "latitude": 55.6695,
       "longitude": 12.5597,
-      "precision": "measured",
-      "host": "dk-01.jumptoserver.com",
-      "measuredIp": "146.70.92.82",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.92.82",
-      "geoChecked": true,
-      "measuredCountryCode": "DK",
-      "measuredCity": "Copenhagen",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Denmark",
-      "siteCity": "Copenhagen"
+      "precision": "measured"
     },
     {
       "id": "fi-p2p",
-      "connection": "fvpn-fi-p2p",
       "label": "Fi-P2P",
       "country": "Finland",
       "countryCode": "",
       "city": "Helsinki",
       "latitude": null,
       "longitude": null,
-      "precision": null,
-      "host": "fi-p2p.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "udp",
-        "tcp"
-      ],
-      "kind": "standard",
-      "generated": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "status": "unreachable",
-      "ip": "37.143.129.237",
-      "reachable": false,
-      "geoChecked": true,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "fi-p2p.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": null
     },
     {
       "id": "finland1",
-      "connection": "fvpn-finland1",
       "label": "Finland 1",
       "country": "Finland",
       "countryCode": "FI",
       "city": "Helsinki",
       "latitude": 60.1695,
       "longitude": 24.9354,
-      "precision": "measured",
-      "host": "fi.jumptoserver.com",
-      "measuredIp": "37.143.129.152",
-      "measuredOrg": "AS136258 BrainStorm Network, Inc",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "37.143.129.152",
-      "geoChecked": true,
-      "measuredCountryCode": "FI",
-      "measuredCity": "Helsinki",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Finland",
-      "siteCity": "Helsinki"
+      "precision": "measured"
     },
     {
       "id": "finland2",
-      "connection": "fvpn-finland2",
       "label": "Finland 2",
       "country": "Finland",
       "countryCode": "FI",
       "city": "Helsinki",
       "latitude": 60.1699,
       "longitude": 24.9384,
-      "precision": "country",
-      "host": "fi2.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Finland",
-      "siteCity": "Helsinki",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "fi2.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "france",
-      "connection": "fvpn-france",
       "label": "France",
       "country": "France",
       "countryCode": "FR",
@@ -663,18 +193,10 @@
       "latitude": 48.9356,
       "longitude": 2.3539,
       "precision": "measured",
-      "host": "fr.jumptoserver.com",
-      "measuredIp": "146.70.40.99",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "retired": true,
-      "status": "retired",
-      "measuredCountryCode": "FR",
-      "measuredCity": "Saint-Denis"
+      "retired": true
     },
     {
       "id": "france-via-uk",
-      "connection": "fvpn-france-via-uk",
       "label": "France (via UK)",
       "country": "France",
       "countryCode": "FR",
@@ -682,7 +204,11 @@
       "latitude": 51.5085,
       "longitude": -0.1257,
       "precision": "measured",
-      "host": "uk-dbl.jumptoserver.com",
+      "countryMismatch": {
+        "claimed": "FR",
+        "measured": "GB",
+        "measuredCity": "London"
+      },
       "via": {
         "label": "United Kingdom",
         "country": "United Kingdom",
@@ -691,325 +217,90 @@
         "latitude": 51.5085,
         "longitude": -0.1257,
         "derivedFrom": "uk1"
-      },
-      "exitVerified": true,
-      "measuredIp": "195.191.219.69",
-      "measuredOrg": "AS3170 VeloxServ Communications Ltd",
-      "countryMismatch": {
-        "claimed": "FR",
-        "measured": "GB",
-        "measuredCity": "London"
-      },
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "multihop",
-      "status": "complete",
-      "ip": "195.191.219.69",
-      "geoChecked": true,
-      "measuredCountryCode": "GB",
-      "measuredCity": "London",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "France",
-      "siteCity": "Paris"
+      }
     },
     {
       "id": "france1",
-      "connection": "fvpn-france1",
       "label": "France - 1",
       "country": "France",
       "countryCode": "FR",
       "city": "Saint-Denis",
       "latitude": 48.9356,
       "longitude": 2.3539,
-      "precision": "server",
-      "host": "fr.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.40.99",
-      "reachable": true,
-      "serverOrg": "AS9009 M247 Europe SRL",
-      "geoChecked": true,
-      "measuredCountryCode": "FR",
-      "measuredCity": "Saint-Denis",
-      "siteListed": true,
-      "siteProtocols": [
-        "IPSec",
-        "TCP"
-      ],
-      "siteCountry": "France",
-      "siteCity": "Paris"
+      "precision": "server"
     },
     {
       "id": "france2",
-      "connection": "fvpn-france2",
       "label": "France - 2",
       "country": "France",
       "countryCode": "FR",
       "city": "Saint-Denis",
       "latitude": 48.9356,
       "longitude": 2.3539,
-      "precision": "server",
-      "host": "fr2.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.40.98",
-      "reachable": true,
-      "serverOrg": "AS9009 M247 Europe SRL",
-      "geoChecked": true,
-      "measuredCountryCode": "FR",
-      "measuredCity": "Saint-Denis",
-      "siteListed": false
+      "precision": "server"
     },
     {
       "id": "germany-dus1",
-      "connection": "fvpn-germany-dus1",
       "label": "Germany - Dusseldorf 1",
       "country": "Germany",
       "countryCode": "DE",
       "city": "D\u00fcsseldorf",
       "latitude": 51.2232,
       "longitude": 6.7793,
-      "precision": "measured",
-      "host": "de-dus1.jumptoserver.com",
-      "measuredIp": "213.202.223.32",
-      "measuredOrg": "AS24961 WIIT AG",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "213.202.223.32",
-      "geoChecked": true,
-      "measuredCountryCode": "DE",
-      "measuredCity": "D\u00fcsseldorf",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Germany",
-      "siteCity": "Hamburg"
+      "precision": "measured"
     },
     {
       "id": "germany-dus2",
-      "connection": "fvpn-germany-dus2",
       "label": "Germany - Dusseldorf 2",
       "country": "Germany",
       "countryCode": "DE",
       "city": "D\u00fcsseldorf",
       "latitude": 51.2232,
       "longitude": 6.7793,
-      "precision": "measured",
-      "host": "de-dus2.jumptoserver.com",
-      "measuredIp": "89.163.157.125",
-      "measuredOrg": "AS24961 WIIT AG",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "89.163.157.125",
-      "geoChecked": true,
-      "measuredCountryCode": "DE",
-      "measuredCity": "D\u00fcsseldorf",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Germany",
-      "siteCity": "Dusseldorf"
+      "precision": "measured"
     },
     {
       "id": "germany-frankfurt",
-      "connection": "fvpn-germany-frankfurt",
       "label": "Germany - Frankfurt",
       "country": "Germany",
       "countryCode": "DE",
       "city": "Frankfurt am Main",
       "latitude": 50.1025,
       "longitude": 8.6299,
-      "precision": "server",
-      "host": "de-01.jumptoserver.com",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "ip": "146.70.139.154",
-      "measuredCountryCode": "DE",
-      "measuredCity": "Frankfurt am Main",
-      "serverOrg": "AS9009 M247 Europe SRL",
-      "geoChecked": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Germany",
-      "siteCity": "Frankfurt",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 61
-      }
+      "precision": "server"
     },
     {
       "id": "germany-via-spain",
-      "connection": "fvpn-germany-via-spain",
       "label": "Germany (via Spain)",
       "country": "Germany",
       "countryCode": "DE",
       "city": "Frankfurt",
       "latitude": null,
       "longitude": null,
-      "precision": null,
-      "host": "es-dbl.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "multihop",
-      "status": "unreachable",
-      "ip": "45.128.39.117",
-      "reachable": false,
-      "geoChecked": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Germany",
-      "siteCity": "Frankfurt",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "es-dbl.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": null
     },
     {
       "id": "greece",
-      "connection": "fvpn-greece",
       "label": "Greece",
       "country": "Greece",
       "countryCode": "GR",
       "city": "Athens",
       "latitude": 37.9838,
       "longitude": 23.7278,
-      "precision": "measured",
-      "host": "grc.jumptoserver.com",
-      "measuredIp": "45.92.33.82",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "45.92.33.82",
-      "geoChecked": true,
-      "measuredCountryCode": "GR",
-      "measuredCity": "Athens",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Greece",
-      "siteCity": "Athina",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 6
-      }
+      "precision": "measured"
     },
     {
       "id": "hk-dbl",
-      "connection": "fvpn-hk-dbl",
       "label": "Hk-Dbl",
       "country": "Canada",
       "countryCode": "",
       "city": "Montreal",
       "latitude": null,
       "longitude": null,
-      "precision": null,
-      "host": "hk-dbl.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "udp",
-        "tcp"
-      ],
-      "kind": "multihop",
-      "generated": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "status": "unreachable",
-      "ip": "193.239.86.4",
-      "reachable": false,
-      "geoChecked": true,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "hk-dbl.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": null
     },
     {
       "id": "hongkong",
-      "connection": "fvpn-hongkong",
       "label": "Hong Kong",
       "country": "Hong Kong",
       "countryCode": "HK",
@@ -1017,93 +308,30 @@
       "latitude": 22.3193,
       "longitude": 114.1694,
       "precision": "city",
-      "host": "hk.jumptoserver.com",
-      "reachable": false,
-      "retired": true,
-      "status": "retired"
+      "retired": true
     },
     {
       "id": "hungary",
-      "connection": "fvpn-hungary",
       "label": "Hungary",
       "country": "Hungary",
       "countryCode": "HU",
       "city": "Budapest",
       "latitude": 47.4984,
       "longitude": 19.0404,
-      "precision": "measured",
-      "host": "hng.jumptoserver.com",
-      "measuredIp": "37.120.144.165",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "37.120.144.165",
-      "geoChecked": true,
-      "measuredCountryCode": "HU",
-      "measuredCity": "Budapest",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Hungary",
-      "siteCity": "Budapest",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 4
-      }
+      "precision": "measured"
     },
     {
       "id": "india-stream",
-      "connection": "fvpn-india-stream",
       "label": "India (Streaming)",
       "country": "India",
       "countryCode": "IN",
       "city": "Mumbai",
       "latitude": 19.076,
       "longitude": 72.8777,
-      "precision": "country",
-      "host": "in-stream2.jumptoserver.com",
-      "variantOf": "india1",
-      "reachable": false,
-      "geoChecked": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "unreachable",
-      "ip": "45.84.241.240",
-      "siteListed": true,
-      "siteProtocols": [
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "India",
-      "siteCity": "Mumbai",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "in-stream2.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "india1",
-      "connection": "fvpn-india1",
       "label": "India",
       "country": "India",
       "countryCode": "IN",
@@ -1111,187 +339,54 @@
       "latitude": 52.4814,
       "longitude": -1.8998,
       "precision": "server",
-      "host": "in-vr.jumptoserver.com",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "45.84.241.245",
       "countryMismatch": {
         "claimed": "IN",
         "measured": "GB",
         "measuredCity": "Birmingham"
-      },
-      "serverOrg": "AS3170 VeloxServ Communications Ltd",
-      "geoChecked": true,
-      "measuredCountryCode": "GB",
-      "measuredCity": "Birmingham",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "India",
-      "siteCity": "Mumbai",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 4
       }
     },
     {
       "id": "ireland-stream",
-      "connection": "fvpn-ireland-stream",
       "label": "Ireland (Streaming)",
       "country": "Ireland",
       "countryCode": "IE",
       "city": "Dublin",
       "latitude": 53.3331,
       "longitude": -6.2489,
-      "precision": "measured",
-      "host": "ie-stream.jumptoserver.com",
-      "variantOf": "ireland1",
-      "measuredIp": "146.70.130.218",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "complete",
-      "ip": "146.70.130.218",
-      "geoChecked": true,
-      "measuredCountryCode": "IE",
-      "measuredCity": "Dublin",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Ireland",
-      "siteCity": "Dublin"
+      "precision": "measured"
     },
     {
       "id": "ireland1",
-      "connection": "fvpn-ireland1",
       "label": "Ireland",
       "country": "Ireland",
       "countryCode": "IE",
       "city": "Dublin",
       "latitude": 53.3331,
       "longitude": -6.2489,
-      "precision": "measured",
-      "host": "ir.jumptoserver.com",
-      "measuredIp": "146.70.130.218",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.130.218",
-      "geoChecked": true,
-      "measuredCountryCode": "IE",
-      "measuredCity": "Dublin",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "L2TP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Ireland",
-      "siteCity": "Dublin"
+      "precision": "measured"
     },
     {
       "id": "italy-stream",
-      "connection": "fvpn-italy-stream",
       "label": "Italy (Streaming)",
       "country": "Italy",
       "countryCode": "IT",
       "city": "Assago",
       "latitude": 45.4642,
       "longitude": 9.19,
-      "precision": "country",
-      "host": "it-stream.jumptoserver.com",
-      "variantOf": "italy1",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Italy",
-      "siteCity": "Assago",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "it-stream.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "italy1",
-      "connection": "fvpn-italy1",
       "label": "Italy",
       "country": "Italy",
       "countryCode": "IT",
       "city": "Milan",
       "latitude": 45.4642,
       "longitude": 9.19,
-      "precision": "country",
-      "host": "it-01.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Italy",
-      "siteCity": "Milan",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "it-01.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "japan-stream",
-      "connection": "fvpn-japan-stream",
       "label": "Japan (Streaming)",
       "country": "Japan",
       "countryCode": "JP",
@@ -1299,373 +394,110 @@
       "latitude": 35.6762,
       "longitude": 139.6503,
       "precision": "country",
-      "host": "jp-stream.jumptoserver.com",
-      "variantOf": "japan1",
-      "reachable": false,
-      "retired": true,
-      "status": "retired"
+      "retired": true
     },
     {
       "id": "japan1",
-      "connection": "fvpn-japan1",
       "label": "Japan",
       "country": "Japan",
       "countryCode": "JP",
       "city": "Tokyo",
       "latitude": 35.6895,
       "longitude": 139.6917,
-      "precision": "measured",
-      "host": "jp-op.jumptoserver.com",
-      "measuredIp": "93.118.41.92",
-      "measuredOrg": "AS58325 Hydra Communications Ltd",
-      "reachable": true,
-      "geoChecked": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "93.118.41.92",
-      "measuredCountryCode": "JP",
-      "measuredCity": "Tokyo",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Japan",
-      "siteCity": "Tokyo"
+      "precision": "measured"
     },
     {
       "id": "luxembourg",
-      "connection": "fvpn-luxembourg",
       "label": "Luxembourg",
       "country": "Luxembourg",
       "countryCode": "LU",
       "city": "Luxembourg",
       "latitude": 49.6116,
       "longitude": 6.1319,
-      "precision": "city",
-      "host": "lux1.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "ip": "5.253.204.43",
-      "geoChecked": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Luxembourg",
-      "siteCity": "Luxembourg",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 61
-      }
+      "precision": "city"
     },
     {
       "id": "malaysia",
-      "connection": "fvpn-malaysia",
       "label": "Malaysia",
       "country": "Malaysia",
       "countryCode": "MY",
       "city": "Kuala Lumpur",
       "latitude": 3.1412,
       "longitude": 101.6865,
-      "precision": "server",
-      "host": "my2.jumptoserver.com",
-      "reachable": true,
-      "geoChecked": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "103.75.116.141",
-      "serverOrg": "AS136258 BrainStorm Network, Inc",
-      "measuredCountryCode": "MY",
-      "measuredCity": "Kuala Lumpur",
-      "siteListed": true,
-      "siteProtocols": [
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Malaysia",
-      "siteCity": "Kuala Lumpur"
+      "precision": "server"
     },
     {
       "id": "mexico",
-      "connection": "fvpn-mexico",
       "label": "Mexico",
       "country": "Mexico",
       "countryCode": "MX",
       "city": "Mexico City",
       "latitude": 19.4326,
       "longitude": -99.1332,
-      "precision": "country",
-      "host": "mx3.jumptoserver.com",
-      "reachable": false,
-      "geoChecked": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "ip": "147.78.1.87",
-      "siteListed": true,
-      "siteProtocols": [
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Mexico",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "mx3.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "netherlands1",
-      "connection": "fvpn-netherlands1",
       "label": "Netherlands 1",
       "country": "Netherlands",
       "countryCode": "NL",
       "city": "Amsterdam",
       "latitude": 52.3676,
       "longitude": 4.9041,
-      "precision": "country",
-      "host": "nl-01.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Netherlands",
-      "siteCity": "Amsterdam",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "nl-01.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "netherlands2",
-      "connection": "fvpn-netherlands2",
       "label": "Netherlands 2",
       "country": "Netherlands",
       "countryCode": "NL",
       "city": "Amsterdam",
       "latitude": 52.3676,
       "longitude": 4.9041,
-      "precision": "country",
-      "host": "nl-02.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": false,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "nl-02.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "norway",
-      "connection": "fvpn-norway",
       "label": "Norway",
       "country": "Norway",
       "countryCode": "NO",
       "city": "Oslo",
       "latitude": 59.9127,
       "longitude": 10.7461,
-      "precision": "measured",
-      "host": "nr-01.jumptoserver.com",
-      "measuredIp": "91.219.215.34",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "91.219.215.34",
-      "geoChecked": true,
-      "measuredCountryCode": "NO",
-      "measuredCity": "Oslo",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Norway",
-      "siteCity": "Oslo"
+      "precision": "measured"
     },
     {
       "id": "poland",
-      "connection": "fvpn-poland",
       "label": "Poland",
       "country": "Poland",
       "countryCode": "PL",
       "city": "Gdansk",
       "latitude": 52.2297,
       "longitude": 21.0122,
-      "precision": "country",
-      "host": "pl.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Poland",
-      "siteCity": "Gdansk",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "pl.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "portugal",
-      "connection": "fvpn-portugal",
       "label": "Portugal",
       "country": "Portugal",
       "countryCode": "PT",
       "city": "Lisbon",
       "latitude": 38.7251,
       "longitude": -9.1498,
-      "precision": "measured",
-      "host": "pt.jumptoserver.com",
-      "measuredIp": "185.90.57.146",
-      "measuredOrg": "AS59787 WEBSP LDA",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "185.90.57.146",
-      "geoChecked": true,
-      "measuredCountryCode": "PT",
-      "measuredCity": "Lisbon",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Portugal",
-      "siteCity": "Lisbon"
+      "precision": "measured"
     },
     {
       "id": "romania",
-      "connection": "fvpn-romania",
       "label": "Romania",
       "country": "Romania",
       "countryCode": "RO",
       "city": "Bucharest",
       "latitude": 44.4323,
       "longitude": 26.1063,
-      "precision": "measured",
-      "host": "ro-01.jumptoserver.com",
-      "measuredIp": "146.70.66.130",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.66.130",
-      "geoChecked": true,
-      "measuredCountryCode": "RO",
-      "measuredCity": "Bucharest",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Romania",
-      "siteCity": "Bucharest",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 10
-      }
+      "precision": "measured"
     },
     {
       "id": "russia",
-      "connection": "fvpn-russia",
       "label": "Russia",
       "country": "Russia",
       "countryCode": "RU",
@@ -1673,76 +505,24 @@
       "latitude": 59.3294,
       "longitude": 18.0687,
       "precision": "measured",
-      "host": "ru-vr.jumptoserver.com",
-      "measuredIp": "91.226.58.5",
-      "measuredOrg": "AS9009 M247 Europe SRL",
       "countryMismatch": {
         "claimed": "RU",
         "measured": "SE",
         "measuredCity": "Stockholm"
-      },
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "91.226.58.5",
-      "geoChecked": true,
-      "measuredCountryCode": "SE",
-      "measuredCity": "Stockholm",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Russia",
-      "siteCity": "Moscow"
+      }
     },
     {
       "id": "serbia",
-      "connection": "fvpn-serbia",
       "label": "Serbia",
       "country": "Serbia",
       "countryCode": "RS",
       "city": "Belgrade",
       "latitude": 44.804,
       "longitude": 20.4651,
-      "precision": "measured",
-      "host": "rs-01.jumptoserver.com",
-      "measuredIp": "37.120.193.138",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "37.120.193.138",
-      "geoChecked": true,
-      "measuredCountryCode": "RS",
-      "measuredCity": "Belgrade",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Serbia",
-      "siteCity": "Belgrade"
+      "precision": "measured"
     },
     {
       "id": "singapore",
-      "connection": "fvpn-singapore",
       "label": "Singapore",
       "country": "Singapore",
       "countryCode": "SG",
@@ -1750,14 +530,10 @@
       "latitude": 1.3521,
       "longitude": 103.8198,
       "precision": "city",
-      "host": "sg-01.jumptoserver.com",
-      "reachable": false,
-      "retired": true,
-      "status": "retired"
+      "retired": true
     },
     {
       "id": "slovakia",
-      "connection": "fvpn-slovakia",
       "label": "Slovakia",
       "country": "Slovakia",
       "countryCode": "SK",
@@ -1765,128 +541,40 @@
       "latitude": 48.1486,
       "longitude": 17.1077,
       "precision": "country",
-      "host": "svk.jumptoserver.com",
-      "reachable": false,
-      "retired": true,
-      "status": "retired"
+      "retired": true
     },
     {
       "id": "southafrica",
-      "connection": "fvpn-southafrica",
       "label": "South Africa",
       "country": "South Africa",
       "countryCode": "ZA",
       "city": "Johannesburg",
       "latitude": -26.2023,
       "longitude": 28.0436,
-      "precision": "measured",
-      "host": "sa-jn.jumptoserver.com",
-      "measuredIp": "129.232.176.170",
-      "measuredOrg": "AS37153 Xneelo (Pty) Ltd",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "129.232.176.170",
-      "geoChecked": true,
-      "measuredCountryCode": "ZA",
-      "measuredCity": "Johannesburg",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "South Africa",
-      "siteCity": "Johannesburg"
+      "precision": "measured"
     },
     {
       "id": "southkorea-stream",
-      "connection": "fvpn-southkorea-stream",
       "label": "South Korea (Streaming)",
       "country": "South Korea",
       "countryCode": "KR",
       "city": "Seoul",
       "latitude": 37.566,
       "longitude": 126.9784,
-      "precision": "server",
-      "host": "kr.jumptoserver.com",
-      "variantOf": "southkorea1",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "complete",
-      "ip": "103.249.31.36",
-      "serverOrg": "AS45382 Hostcenter",
-      "geoChecked": true,
-      "measuredCountryCode": "KR",
-      "measuredCity": "Seoul",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "South Korea",
-      "siteCity": "Seoul",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 5
-      }
+      "precision": "server"
     },
     {
       "id": "southkorea1",
-      "connection": "fvpn-southkorea1",
       "label": "South Korea",
       "country": "South Korea",
       "countryCode": "KR",
       "city": "Seoul",
       "latitude": 37.566,
       "longitude": 126.9784,
-      "precision": "server",
-      "host": "kr.jumptoserver.com",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "103.249.31.36",
-      "serverOrg": "AS45382 Hostcenter",
-      "geoChecked": true,
-      "measuredCountryCode": "KR",
-      "measuredCity": "Seoul",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "South Korea",
-      "siteCity": "Seoul",
-      "verified": {
-        "result": "ok",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "seconds": 5
-      }
+      "precision": "server"
     },
     {
       "id": "spain",
-      "connection": "fvpn-spain",
       "label": "Spain",
       "country": "Spain",
       "countryCode": "ES",
@@ -1894,155 +582,50 @@
       "latitude": 40.4168,
       "longitude": -3.7038,
       "precision": "country",
-      "host": "es-01.jumptoserver.com",
-      "reachable": false,
-      "retired": true,
-      "status": "retired"
+      "retired": true
     },
     {
       "id": "spain-stream",
-      "connection": "fvpn-spain-stream",
       "label": "Spain (Streaming)",
       "country": "Spain",
       "countryCode": "ES",
       "city": null,
       "latitude": null,
       "longitude": null,
-      "precision": null,
-      "host": "es-stream.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "unreachable",
-      "ip": "45.128.39.116",
-      "reachable": false,
-      "geoChecked": true,
-      "siteListed": false,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "es-stream.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": null
     },
     {
       "id": "spain1",
-      "connection": "fvpn-spain1",
       "label": "Spain - 1",
       "country": "Spain",
       "countryCode": "ES",
       "city": "Barcelona",
       "latitude": null,
       "longitude": null,
-      "precision": null,
-      "host": "es-01.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "ip": "45.128.39.115",
-      "reachable": false,
-      "geoChecked": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Spain",
-      "siteCity": "Barcelona",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "es-01.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": null
     },
     {
       "id": "sweden",
-      "connection": "fvpn-sweden",
       "label": "Sweden",
       "country": "Sweden",
       "countryCode": "SE",
       "city": "Stockholm",
       "latitude": 59.3294,
       "longitude": 18.0687,
-      "precision": "measured",
-      "host": "se-01.jumptoserver.com",
-      "measuredIp": "146.70.16.234",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "146.70.16.234",
-      "geoChecked": true,
-      "measuredCountryCode": "SE",
-      "measuredCity": "Stockholm",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Sweden",
-      "siteCity": "Stockholm"
+      "precision": "measured"
     },
     {
       "id": "switzerland",
-      "connection": "fvpn-switzerland",
       "label": "Switzerland",
       "country": "Switzerland",
       "countryCode": "CH",
       "city": "Z\u00fcrich",
       "latitude": 47.395,
       "longitude": 8.4488,
-      "precision": "measured",
-      "host": "ch-01.jumptoserver.com",
-      "measuredIp": "37.120.213.10",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "37.120.213.10",
-      "geoChecked": true,
-      "measuredCountryCode": "CH",
-      "measuredCity": "Z\u00fcrich",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Switzerland",
-      "siteCity": "Zurich"
+      "precision": "measured"
     },
     {
       "id": "switzerland-via-usa",
-      "connection": "fvpn-switzerland-via-usa",
       "label": "Switzerland (via United States)",
       "country": "Switzerland",
       "countryCode": "CH",
@@ -2050,18 +633,11 @@
       "latitude": 34.0522,
       "longitude": -118.2437,
       "precision": "server",
-      "host": "us-dvpn.jumptoserver.com",
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "multihop",
-      "status": "complete",
-      "ip": "88.216.97.4",
-      "reachable": true,
-      "serverOrg": "AS9009 M247 Europe SRL",
-      "geoChecked": true,
+      "countryMismatch": {
+        "claimed": "CH",
+        "measured": "US",
+        "measuredCity": "Los Angeles"
+      },
       "via": {
         "label": "United States",
         "country": "United States",
@@ -2070,64 +646,20 @@
         "latitude": 39.0437,
         "longitude": -77.4875,
         "derivedFrom": "usa-ashburn"
-      },
-      "measuredCountryCode": "US",
-      "measuredCity": "Los Angeles",
-      "countryMismatch": {
-        "claimed": "CH",
-        "measured": "US",
-        "measuredCity": "Los Angeles"
-      },
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Switzerland",
-      "siteCity": "Zurich"
+      }
     },
     {
       "id": "turkey",
-      "connection": "fvpn-turkey",
       "label": "Turkey",
       "country": "Turkey",
       "countryCode": "TR",
       "city": "Istanbul",
       "latitude": 41.0138,
       "longitude": 28.9497,
-      "precision": "measured",
-      "host": "tr.jumptoserver.com",
-      "measuredIp": "185.123.101.43",
-      "measuredOrg": "AS206991 Iksir Internet Hizmetleri A.S.",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "185.123.101.43",
-      "geoChecked": true,
-      "measuredCountryCode": "TR",
-      "measuredCity": "Istanbul",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Turkey",
-      "siteCity": "Izmir"
+      "precision": "measured"
     },
     {
       "id": "uae-dubai",
-      "connection": "fvpn-uae-dubai",
       "label": "UAE - Dubai",
       "country": "United Arab Emirates",
       "countryCode": "AE",
@@ -2135,506 +667,150 @@
       "latitude": 25.2048,
       "longitude": 55.2708,
       "precision": "city",
-      "host": "uae.jumptoserver.com",
-      "reachable": false,
-      "retired": true,
-      "status": "retired"
+      "retired": true
     },
     {
       "id": "uk-stream",
-      "connection": "fvpn-uk-stream",
       "label": "United Kingdom (Streaming)",
       "country": "United Kingdom",
       "countryCode": "GB",
       "city": "London",
       "latitude": 51.5085,
       "longitude": -0.1257,
-      "precision": "measured",
-      "host": "uk-streaming.jumptoserver.com",
-      "variantOf": "uk1",
-      "measuredIp": "195.191.219.70",
-      "measuredOrg": "AS3170 VeloxServ Communications Ltd",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "complete",
-      "ip": "195.191.219.70",
-      "geoChecked": true,
-      "measuredCountryCode": "GB",
-      "measuredCity": "London",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "UK",
-      "siteCity": "London"
+      "precision": "measured"
     },
     {
       "id": "uk1",
-      "connection": "fvpn-uk1",
       "label": "United Kingdom 1",
       "country": "United Kingdom",
       "countryCode": "GB",
       "city": "London",
       "latitude": 51.5085,
       "longitude": -0.1257,
-      "precision": "measured",
-      "host": "uk-01.jumptoserver.com",
-      "measuredIp": "195.191.219.67",
-      "measuredOrg": "AS3170 VeloxServ Communications Ltd",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "195.191.219.67",
-      "geoChecked": true,
-      "measuredCountryCode": "GB",
-      "measuredCity": "London",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "UK",
-      "siteCity": "London"
+      "precision": "measured"
     },
     {
       "id": "uk2",
-      "connection": "fvpn-uk2",
       "label": "United Kingdom 2",
       "country": "United Kingdom",
       "countryCode": "GB",
       "city": "London",
       "latitude": 51.5085,
       "longitude": -0.1257,
-      "precision": "measured",
-      "host": "uk-02.jumptoserver.com",
-      "measuredIp": "195.191.219.68",
-      "measuredOrg": "AS3170 VeloxServ Communications Ltd",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "195.191.219.68",
-      "geoChecked": true,
-      "measuredCountryCode": "GB",
-      "measuredCity": "London",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "UK",
-      "siteCity": "London"
+      "precision": "measured"
     },
     {
       "id": "ukraine",
-      "connection": "fvpn-ukraine",
       "label": "Ukraine",
       "country": "Ukraine",
       "countryCode": "UA",
       "city": "Kyiv",
       "latitude": 50.4547,
       "longitude": 30.5238,
-      "precision": "server",
-      "host": "ur-kv.jumptoserver.com",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "176.103.55.146",
-      "measuredCountryCode": "UA",
-      "measuredCity": "Kyiv",
-      "serverOrg": "AS48031 Ivanov Vitaliy Sergeevich",
-      "geoChecked": true,
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "Ukraine",
-      "siteCity": "Kyyiv"
+      "precision": "server"
     },
     {
       "id": "usa-ashburn",
-      "connection": "fvpn-usa-ashburn",
       "label": "USA - Ashburn",
       "country": "United States",
       "countryCode": "US",
       "city": "Ashburn",
       "latitude": 39.0437,
       "longitude": -77.4875,
-      "precision": "measured",
-      "host": "us-ash.jumptoserver.com",
-      "measuredIp": "140.174.186.98",
-      "measuredOrg": "AS40676 Psychz Networks",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "140.174.186.98",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Ashburn",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Ashburn"
+      "precision": "measured"
     },
     {
       "id": "usa-atlanta",
-      "connection": "fvpn-usa-atlanta",
       "label": "USA - Atlanta",
       "country": "United States",
       "countryCode": "US",
       "city": "Atlanta",
       "latitude": 33.749,
       "longitude": -84.388,
-      "precision": "measured",
-      "host": "us-at.jumptoserver.com",
-      "measuredIp": "167.160.88.250",
-      "measuredOrg": "AS63018 Dedicated.com",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "167.160.88.250",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Atlanta",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Atlanta"
+      "precision": "measured"
     },
     {
       "id": "usa-chicago",
-      "connection": "fvpn-usa-chicago",
       "label": "USA - Chicago",
       "country": "United States",
       "countryCode": "US",
       "city": "Los Angeles",
       "latitude": 34.0522,
       "longitude": -118.2437,
-      "precision": "measured",
-      "host": "us-ch.jumptoserver.com",
-      "measuredIp": "88.216.97.2",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "88.216.97.2",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Los Angeles",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Chicago"
+      "precision": "measured"
     },
     {
       "id": "usa-dallas",
-      "connection": "fvpn-usa-dallas",
       "label": "USA - Dallas",
       "country": "United States",
       "countryCode": "US",
       "city": "Dallas",
       "latitude": 32.7767,
       "longitude": -96.797,
-      "precision": "city",
-      "host": "us-dl.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Dallas",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "us-dl.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "city"
     },
     {
       "id": "usa-losangeles",
-      "connection": "fvpn-usa-losangeles",
       "label": "USA - Los Angeles",
       "country": "United States",
       "countryCode": "US",
       "city": "Los Angeles",
       "latitude": 34.0522,
       "longitude": -118.2437,
-      "precision": "city",
-      "host": "us-la.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Los Angeles",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "us-la.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "city"
     },
     {
       "id": "usa-miami",
-      "connection": "fvpn-usa-miami",
       "label": "USA - Miami",
       "country": "United States",
       "countryCode": "US",
       "city": "Miami",
       "latitude": 25.7867,
       "longitude": -80.18,
-      "precision": "measured",
-      "host": "us-mia.jumptoserver.com",
-      "measuredIp": "37.120.157.250",
-      "measuredOrg": "AS9009 M247 Europe SRL",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "37.120.157.250",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Miami",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "IPSec",
-        "L2TP",
-        "OpenConnect",
-        "PPTP",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Miami"
+      "precision": "measured"
     },
     {
       "id": "usa-newyork",
-      "connection": "fvpn-usa-newyork",
       "label": "USA - New York",
       "country": "United States",
       "countryCode": "US",
       "city": "New York City",
       "latitude": 40.7143,
       "longitude": -74.006,
-      "precision": "measured",
-      "host": "us-ny1.jumptoserver.com",
-      "measuredIp": "23.95.75.25",
-      "measuredOrg": "AS136258 BrainStorm Network, Inc",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "23.95.75.25",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "New York City",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "New York"
+      "precision": "measured"
     },
     {
       "id": "usa-seattle",
-      "connection": "fvpn-usa-seattle",
       "label": "USA - Seattle",
       "country": "United States",
       "countryCode": "US",
       "city": "Seattle",
       "latitude": 47.6062,
       "longitude": -122.3321,
-      "precision": "measured",
-      "host": "us-se.jumptoserver.com",
-      "measuredIp": "107.175.82.198",
-      "measuredOrg": "AS136258 BrainStorm Network, Inc",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "107.175.82.198",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Seattle",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Seattle"
+      "precision": "measured"
     },
     {
       "id": "usa-stream1",
-      "connection": "fvpn-usa-stream1",
       "label": "USA (Streaming 1)",
       "country": "United States",
       "countryCode": "US",
       "city": "Ashburn",
       "latitude": 39.0437,
       "longitude": -77.4875,
-      "precision": "measured",
-      "host": "us-ash-stream.jumptoserver.com",
-      "variantOf": "usa-ashburn",
-      "measuredIp": "140.174.186.99",
-      "measuredOrg": "AS40676 Psychz Networks",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "complete",
-      "ip": "140.174.186.99",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Ashburn",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Fargo"
+      "precision": "measured"
     },
     {
       "id": "usa-stream2",
-      "connection": "fvpn-usa-stream2",
       "label": "USA (Streaming 2)",
       "country": "United States",
       "countryCode": "US",
       "city": null,
       "latitude": 39.8283,
       "longitude": -98.5795,
-      "precision": "country",
-      "host": "us-stream2.jumptoserver.com",
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "streaming",
-      "status": "unreachable",
-      "siteListed": false,
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "us-stream2.jumptoserver.com",
-        "seconds": 61
-      }
+      "precision": "country"
     },
     {
       "id": "usa-via-netherlands",
-      "connection": "fvpn-usa-via-netherlands",
       "label": "USA (via Netherlands)",
       "country": "United States",
       "countryCode": "US",
@@ -2642,7 +818,6 @@
       "latitude": 39.8283,
       "longitude": -98.5795,
       "precision": "country",
-      "host": "nl-dbl.jumptoserver.com",
       "via": {
         "label": "Netherlands",
         "country": "Netherlands",
@@ -2651,58 +826,17 @@
         "latitude": 52.3676,
         "longitude": 4.9041,
         "derivedFrom": "netherlands1"
-      },
-      "exitVerified": false,
-      "reachable": false,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "multihop",
-      "status": "unreachable",
-      "siteListed": true,
-      "siteProtocols": [
-        "IKEv2",
-        "TCP",
-        "UDP"
-      ],
-      "siteCountry": "USA",
-      "siteCity": "Kansas City",
-      "verified": {
-        "result": "no-response",
-        "at": "2026-09-05",
-        "method": "openvpn-connect",
-        "testedHost": "nl-dbl.jumptoserver.com",
-        "seconds": 61
       }
     },
     {
       "id": "usa-washington",
-      "connection": "fvpn-usa-washington",
       "label": "USA - Washington DC",
       "country": "United States",
       "countryCode": "US",
       "city": "Centreville",
       "latitude": 38.8404,
       "longitude": -77.4289,
-      "precision": "measured",
-      "host": "us-wt1.jumptoserver.com",
-      "measuredIp": "162.210.193.144",
-      "measuredOrg": "AS30633 Leaseweb USA, Inc.",
-      "reachable": true,
-      "port": 4443,
-      "protocols": [
-        "tcp",
-        "udp"
-      ],
-      "kind": "standard",
-      "status": "complete",
-      "ip": "162.210.193.144",
-      "geoChecked": true,
-      "measuredCountryCode": "US",
-      "measuredCity": "Centreville",
-      "siteListed": false
+      "precision": "measured"
     }
   ]
 }

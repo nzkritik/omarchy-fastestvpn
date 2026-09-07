@@ -177,10 +177,8 @@ Item {
           var lat = Number(r.latitude), lon = Number(r.longitude)
           if (!isFinite(lat) || !isFinite(lon)) continue
           if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue
-          var st = String(r.status || "")
           out.push({
             id: r.id,
-            connection: String(r.connection || ("fvpn-" + r.id)),
             label: String(r.label || r.id),
             country: String(r.country || ""),
             countryCode: String(r.countryCode || ""),
@@ -188,13 +186,7 @@ Item {
             latitude: lat,
             longitude: lon,
             precision: String(r.precision || "country"),
-            kind: String(r.kind || "standard"),
-            protocols: (r.protocols && r.protocols.length) ? r.protocols : ["udp"],
-            // Informational only. Availability is decided by real connect
-            // verdicts in `endpointState`, never by this field.
-            status: st,
             retired: r.retired === true,
-            variantOf: r.variantOf ? String(r.variantOf) : "",
             countryMismatch: r.countryMismatch || null,
             via: r.via || null
           })
@@ -324,12 +316,11 @@ Item {
     for (var j = 0; j < ids.length; j++) {
       out.push({
         id: ids[j],
-        connection: "fvpn-" + ids[j],
         label: ids[j],
         country: "", countryCode: "", city: "",
         latitude: NaN, longitude: NaN,
-        precision: "none", kind: "custom", protocols: ["udp"],
-        status: "", retired: false, variantOf: "",
+        precision: "none",
+        retired: false,
         countryMismatch: null, via: null,
         custom: true
       })
