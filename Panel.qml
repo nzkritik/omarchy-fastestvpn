@@ -23,6 +23,10 @@ Panel {
   property string query: ""
   property bool showUnavailable: false
   property bool configOpen: false
+  // Which row the user has picked out, which is NOT the same as connecting to
+  // it. Clicking a location used to dial it immediately, so a mis-click cost a
+  // real connection attempt — and on this provider an attempt is not free.
+  property string selectedId: ""
 
   // Persist one key back into this widget's shell.json entry. The host owns
   // the file; updateEntryInline merges into the existing entry and rewrites it,
@@ -80,6 +84,13 @@ Panel {
 
   readonly property var activeLoc: service ? service.activeLocation : null
 
+  // Selecting is free and reversible; it only moves the highlight.
+  function selectRow(loc) {
+    if (!loc) return
+    root.selectedId = (root.selectedId === loc.id) ? "" : loc.id
+  }
+
+  // The deliberate action, reached only through the row's own button.
   function connectRow(loc) {
     if (!service || !loc) return
     if (service.activeId === loc.id) { service.disconnect(); return }
@@ -138,7 +149,17 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       onCloseRequested: root.close()
-      onActivateRequested: if (root.service && root.service.connected) root.service.disconnect()
+      // Enter acts on the selection, matching the button the user can see.
+      onActivateRequested: {
+        if (!root.service) return
+        var loc = root.selectedId ? root.service.locationById(root.selectedId) : null
+        if (loc && (root.service.hasTransport(loc.id, root.service.transport)
+                    || root.service.activeId === loc.id)) {
+          root.connectRow(loc)
+        } else if (root.service.connected) {
+          root.service.disconnect()
+        }
+      }
     }
 
     ColumnLayout {
@@ -395,15 +416,21 @@ Panel {
           // action, and it is the only way back from a verdict that was really
           // a throttled account or a dropped uplink.
           readonly property bool usable: imported || isActive
+          readonly property bool isSelected: root.selectedId === modelData.id
           opacity: usable ? 1.0 : 0.45
-          color: (hover.hovered && usable) ? Util.alpha(root.foreground, 0.08)
-               : (isActive ? Util.alpha(root.accent, 0.16) : "transparent")
+          // Three states to tell apart: connected, merely picked out, hovered.
+          color: isActive ? Util.alpha(root.accent, 0.16)
+               : isSelected ? Util.alpha(root.foreground, 0.13)
+               : hover.hovered ? Util.alpha(root.foreground, 0.06)
+               : "transparent"
+          border.width: isSelected && !isActive ? 1 : 0
+          border.color: Util.alpha(root.foreground, 0.28)
 
-          HoverHandler { id: hover; enabled: row.usable }
+          HoverHandler { id: hover }
           // Separate from `hover`, which is disabled on rows that cannot be
           // clicked — the explanation is most wanted on exactly those.
           HoverHandler { id: infoHover }
-          TapHandler { onTapped: root.connectRow(row.modelData) }
+          TapHandler { onTapped: root.selectRow(row.modelData) }
 
           // What happened last time, in words. "unavailable" on its own sends
           // you to the journal to find out why; the reason is already recorded.
@@ -415,7 +442,7 @@ Panel {
             var when = v.at ? ("\n" + v.at.replace("T", " ").replace("Z", " UTC")) : ""
             if (v.result === "unreachable")
               return "Last attempt: " + (v.detail || "no response")
-                   + "\nClick to try again" + when
+                   + "\nSelect it and press Retry to try again" + when
             if (v.result === "auth")
               return "Last attempt: " + (v.detail || "credentials rejected") + when
             if (v.result === "ok") return "Connected successfully last time" + when
@@ -479,7 +506,8 @@ Panel {
             }
 
             Text {
-              visible: text !== ""
+              // Give way to the action button rather than crowding it.
+              visible: text !== "" && !actionButton.visible
               text: {
                 if (!root.service) return ""
                 if (!row.imported) return "not imported"
@@ -493,6 +521,44 @@ Panel {
               color: root.urgent
               font.family: root.fontFamily
               font.pixelSize: Style.space(10)
+            }
+
+            // The only route to an actual connection. Shown on the selected
+            // row, and on the connected one so there is always a way back out.
+            // Styled to match the transport chips above rather than pulling in
+            // a Controls Button, which is too tall for a 40px row.
+            Rectangle {
+              id: actionButton
+              Layout.alignment: Qt.AlignVCenter
+              visible: (row.isSelected && row.usable) || row.isActive
+              implicitWidth: actionText.implicitWidth + Style.space(18)
+              implicitHeight: Style.space(24)
+              radius: height / 2
+              readonly property bool isDisconnect: row.isActive
+              color: actionHover.hovered
+                     ? Util.alpha(isDisconnect ? root.urgent : root.accent, 0.34)
+                     : Util.alpha(isDisconnect ? root.urgent : root.accent, 0.20)
+              border.width: 1
+              border.color: Util.alpha(isDisconnect ? root.urgent : root.accent, 0.65)
+              opacity: (root.service && root.service.busy) ? 0.5 : 1
+
+              HoverHandler { id: actionHover }
+              TapHandler {
+                onTapped: {
+                  if (root.service && root.service.busy) return
+                  root.connectRow(row.modelData)
+                }
+              }
+
+              Text {
+                id: actionText
+                anchors.centerIn: parent
+                text: actionButton.isDisconnect ? "Disconnect"
+                    : row.unavailable ? "Retry" : "Connect"
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.space(11)
+              }
             }
           }
         }
