@@ -91,12 +91,22 @@ PY
 
 # Why did it fail? The exit code cannot tell us: AUTH_FAILED and a dead server
 # both surface as a non-zero nmcli. The journal can.
+# journalctl prints its own status lines ("-- No entries --", "-- Journal
+# begins at ... --") on stdout, so an empty result is NOT an empty string.
+# Stripping them is what makes the "did that work? if not, try the other unit"
+# test below meaningful — without it the first query always looked successful
+# and the fallback never ran, which left every diagnosis "inconclusive".
+_journal() {
+    journalctl --no-pager "$@" 2>/dev/null | grep -v '^-- ' || true
+}
+
 diagnose() {
     local since="$1" log=""
     command -v journalctl >/dev/null || { echo "inconclusive|"; return; }
-    log="$(journalctl --user-unit=NetworkManager --since="$since" --no-pager 2>/dev/null \
-           | tail -200)"
-    [[ -n "$log" ]] || log="$(journalctl -u NetworkManager --since="$since" --no-pager 2>/dev/null | tail -200)"
+    # NetworkManager is a system service and openvpn logs under it; the user
+    # unit is only a fallback for a session-scoped setup.
+    log="$(_journal -u NetworkManager --since="$since" | tail -200)"
+    [[ -n "$log" ]] || log="$(_journal --user-unit=NetworkManager --since="$since" | tail -200)"
     if grep -q 'AUTH_FAILED' <<<"$log"; then
         echo "auth|credentials rejected (bad password, or too many open sessions)"
     elif grep -qi 'TLS key negotiation failed\|TLS Error\|Connection timed out' <<<"$log"; then
@@ -223,7 +233,17 @@ if (( ! activated )); then
     # Leave nothing half-up: a connection stuck activating would otherwise block
     # the next attempt, since down_active_vpns only tears down what is active.
     nmcli connection down uuid "$uuid" >/dev/null 2>&1 || true
-    fail unreachable "did not finish connecting within $((WAIT_SECS + GRACE_SECS))s"
+    # Ask the journal before giving up. Running out of patience is not a reason,
+    # and "did not finish connecting within 65s" told the user nothing they
+    # could act on when openvpn had already logged exactly what went wrong.
+    # Tear-down happens first so the TLS timeout is on the record by now.
+    verdict="$(diagnose "$started")"
+    why="${verdict#*|}"
+    case "${verdict%%|*}" in
+        auth)        fail auth "${why}" ;;
+        unreachable) fail unreachable "${why}" ;;
+    esac
+    fail unreachable "no response within $((WAIT_SECS + GRACE_SECS))s"
 fi
 
 # "Activated" is not the same as usable. NM reports the VPN up as soon as the

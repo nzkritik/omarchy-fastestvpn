@@ -400,7 +400,30 @@ Panel {
                : (isActive ? Util.alpha(root.accent, 0.16) : "transparent")
 
           HoverHandler { id: hover; enabled: row.usable }
+          // Separate from `hover`, which is disabled on rows that cannot be
+          // clicked — the explanation is most wanted on exactly those.
+          HoverHandler { id: infoHover }
           TapHandler { onTapped: root.connectRow(row.modelData) }
+
+          // What happened last time, in words. "unavailable" on its own sends
+          // you to the journal to find out why; the reason is already recorded.
+          readonly property string verdictText: {
+            if (!root.service) return ""
+            if (!row.imported) return "No profile imported for this location"
+            var v = root.service.verdictFor(row.modelData.id)
+            if (!v) return ""
+            var when = v.at ? ("\n" + v.at.replace("T", " ").replace("Z", " UTC")) : ""
+            if (v.result === "unreachable")
+              return "Last attempt: " + (v.detail || "no response")
+                   + "\nClick to try again" + when
+            if (v.result === "auth")
+              return "Last attempt: " + (v.detail || "credentials rejected") + when
+            if (v.result === "ok") return "Connected successfully last time" + when
+            return ""
+          }
+          ToolTip.visible: infoHover.hovered && row.verdictText !== ""
+          ToolTip.text: row.verdictText
+          ToolTip.delay: 400
 
           RowLayout {
             anchors.fill: parent
