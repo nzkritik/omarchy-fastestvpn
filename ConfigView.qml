@@ -211,9 +211,6 @@ ColumnLayout {
           Button {
             text: "Refresh profiles"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: cfg.visible && hovered
-            ToolTip.text: "Download FastestVPN's current .ovpn bundle into the\n"
-                        + "profile directory. Downloads only — connects to nothing."
             onClicked: if (cfg.service) cfg.service.fetchProfiles()
           }
 
