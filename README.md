@@ -3,6 +3,8 @@
 Connect, switch and monitor FastestVPN locations from the Omarchy bar, with a
 world map of exit points.
 
+![Disconnected, showing every location on a world map; and connected to Denmark, with the country outlined and the camera framed on it](docs/screenshot.png)
+
 > Work in progress. It does what is described here, but the panel is plain and
 > parts of the location data are still rough.
 
