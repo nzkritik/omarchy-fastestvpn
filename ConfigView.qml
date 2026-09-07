@@ -81,10 +81,20 @@ ColumnLayout {
           Layout.fillWidth: true
           placeholderText: "you@example.com"
           font.family: cfg.fontFamily
-          // Bound once, then owned by the user's typing: rebinding on every
-          // service change would fight the cursor while they type.
-          Component.onCompleted: text = cfg.service ? cfg.service.account : ""
           onEditingFinished: cfg.settingChanged("username", text.trim())
+        }
+
+        // This view is built with the panel, which happens BEFORE the bar
+        // pushes shell.json settings into the service — so a one-shot
+        // Component.onCompleted assignment read an empty account and the field
+        // stayed blank forever. Track the value instead, but stand aside while
+        // the field has focus so it never fights the user's typing.
+        Binding {
+          target: accountField
+          property: "text"
+          value: cfg.service ? cfg.service.account : ""
+          when: !accountField.activeFocus
+          restoreMode: Binding.RestoreNone
         }
 
         FieldLabel {
@@ -177,8 +187,15 @@ ColumnLayout {
           Layout.fillWidth: true
           placeholderText: "~/.local/share/fastestvpn/profiles"
           font.family: cfg.fontFamily
-          Component.onCompleted: text = cfg.service ? cfg.service.profileDir : ""
           onEditingFinished: cfg.settingChanged("profileDir", text.trim())
+        }
+
+        Binding {
+          target: dirField
+          property: "text"
+          value: cfg.service ? cfg.service.profileDir : ""
+          when: !dirField.activeFocus
+          restoreMode: Binding.RestoreNone
         }
 
         RowLayout {
