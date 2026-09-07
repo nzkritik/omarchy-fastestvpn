@@ -85,6 +85,30 @@ Item {
       if (!allLocations[i].retired && !hasTransport(allLocations[i].id, transport)) n++
     return n
   }
+  // Every location dialable on this transport, working or not. liveCount plus
+  // unavailableHereCount equals this, so the three numbers the panel shows are
+  // consistent with one another.
+  readonly property int importedCount: {
+    var n = 0
+    for (var i = 0; i < allLocations.length; i++)
+      if (!allLocations[i].retired && hasTransport(allLocations[i].id, transport)) n++
+    return n
+  }
+
+  // Flagged unavailable AND present on this transport. The panel's chip counts
+  // this rather than every verdict on record, or the arithmetic would not add
+  // up on a transport where some of the failed endpoints are not imported.
+  readonly property int unavailableHereCount: {
+    var n = 0
+    for (var i = 0; i < allLocations.length; i++) {
+      var l = allLocations[i]
+      if (!l.retired && hasTransport(l.id, transport) && isUnavailable(l.id)) n++
+    }
+    return n
+  }
+
+  // Every verdict on record, regardless of transport — what the settings screen
+  // offers to clear.
   readonly property int unavailableCount: {
     var n = 0
     for (var i = 0; i < allLocations.length; i++)

@@ -127,7 +127,9 @@ Panel {
         city: l ? l.city : "",
         catalogue: root.service.allLocations.length,
         selectable: root.service.liveCount,
-        unavailable: root.service.unavailableCount,
+        imported: root.service.importedCount,
+        unavailable: root.service.unavailableHereCount,
+        unavailableAll: root.service.unavailableCount,
         notImported: root.service.notInstalledCount,
         shown: root.rows.length,
         lastError: root.service.lastError
@@ -193,7 +195,7 @@ Panel {
 
         Text {
           visible: text !== "" && !root.configOpen
-          text: root.service ? (root.service.liveCount + " locations") : ""
+          text: root.service ? (root.service.importedCount + " locations") : ""
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.space(10)
@@ -341,12 +343,16 @@ Panel {
           Rectangle {
             required property var modelData
             readonly property bool on: root.service && root.service.transport === modelData
+            // Available on this transport — imported and not already known
+            // broken. Counting everything imported would promise more than the
+            // chip can deliver.
             readonly property int count: {
               if (!root.service) return 0
               var n = 0
               for (var i = 0; i < root.service.allLocations.length; i++) {
                 var l = root.service.allLocations[i]
-                if (!l.retired && root.service.hasTransport(l.id, modelData)) n++
+                if (!l.retired && root.service.hasTransport(l.id, modelData)
+                    && !root.service.isUnavailable(l.id)) n++
               }
               return n
             }
@@ -388,7 +394,10 @@ Panel {
           Text {
             id: unavailText
             anchors.centerIn: parent
-            text: "Show unavailable"
+            text: {
+              var n = root.service ? root.service.unavailableHereCount : 0
+              return n > 0 ? ("Show unavailable  " + n) : "Show unavailable"
+            }
             color: root.showUnavailable ? root.foreground : root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.space(11)
