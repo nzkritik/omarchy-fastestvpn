@@ -463,9 +463,14 @@ Panel {
             if (v.result === "ok") return "Connected successfully last time" + when
             return ""
           }
-          ToolTip.visible: !root.configOpen && infoHover.hovered && row.verdictText !== ""
-          ToolTip.text: row.verdictText
-          ToolTip.delay: 400
+          // PanelToolTip is omarchy's themed wrapper; a bare Controls ToolTip
+          // renders as an unstyled white box against any theme. infoHover is a
+          // HoverHandler, whose `hovered` really is a bool — unlike the
+          // `hovered` on omarchy's Button, which is a signal and always truthy.
+          PanelToolTip {
+            visible: !root.configOpen && infoHover.hovered && row.verdictText !== ""
+            text: row.verdictText
+          }
 
           RowLayout {
             anchors.fill: parent

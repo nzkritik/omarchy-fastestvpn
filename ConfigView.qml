@@ -240,8 +240,7 @@ ColumnLayout {
           Button {
             text: "Import profiles"
             enabled: cfg.service && cfg.service.configured && !cfg.service.updating
-            ToolTip.visible: cfg.visible && hovered
-            ToolTip.text: "Create a NetworkManager connection for each profile.\n"
+            tooltipText: "Create a NetworkManager connection for each profile.\n"
                         + "Asks for your password once — this is the only step\n"
                         + "that needs administrator rights."
             onClicked: if (cfg.service) cfg.service.importProfiles()
@@ -287,8 +286,7 @@ ColumnLayout {
           Button {
             text: "Locate new"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: cfg.visible && hovered
-            ToolTip.text: "Look up where each new endpoint's server is.\n"
+            tooltipText: "Look up where each new endpoint's server is.\n"
                         + "Runs automatically after an import."
             onClicked: if (cfg.service) cfg.service.geolocate(false)
           }
@@ -296,8 +294,7 @@ ColumnLayout {
           Button {
             text: "Re-locate all"
             enabled: cfg.service && !cfg.service.updating
-            ToolTip.visible: cfg.visible && hovered
-            ToolTip.text: "Look every endpoint up again, even ones already known."
+            tooltipText: "Look every endpoint up again, even ones already known."
             onClicked: if (cfg.service) cfg.service.geolocate(true)
           }
 
@@ -346,8 +343,7 @@ ColumnLayout {
           Button {
             text: "Clear all"
             enabled: cfg.service && cfg.service.unavailableCount > 0
-            ToolTip.visible: cfg.visible && hovered
-            ToolTip.text: "Forget every recorded failure and let them all be tried again."
+            tooltipText: "Forget every recorded failure and let them all be tried again."
             onClicked: {
               if (!cfg.service) return
               var ids = []
