@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "nzkritik.fastestvpn",
+  "name": "FastestVPN",
+  "version": "0.1.0",
+  "author": "nzkritik",
+  "license": "MIT",
+  "description": "Connect, switch and monitor FastestVPN locations from the Omarchy bar, with a world map of exit points.",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "FastestVPN",
+    "description": "Monitor and control FastestVPN from the bar",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "hideDeadEndpoints": true,
+      "refreshIntervalSec": 30
+    },
+    "schema": [
+      {
+        "key": "hideDeadEndpoints",
+        "type": "boolean",
+        "label": "Hide locations whose server is unreachable",
+        "defaultValue": true
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Fallback refresh interval (seconds)",
+        "min": 5,
+        "max": 3600,
+        "step": 5,
+        "defaultValue": 30
+      }
+    ]
+  }
+}

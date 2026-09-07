@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# fvpn-creds — manage the FastestVPN password in the desktop keyring
+#
+#   fvpn-creds store    prompt for the password and save it (Secret Service)
+#   fvpn-creds status   report whether a credential is present (never prints it)
+#   fvpn-creds forget   delete the saved credential
+#
+# FastestVPN uses one account across every location, so a single keyring entry
+# covers all profiles. The secret is never passed as an argument and is never
+# written to disk in the clear.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+CONF="${FVPN_CONF:-${HOME}/Dev/fastestvpn/fastestvpn.conf}"
+SERVICE=fastestvpn
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+command -v secret-tool >/dev/null || die "secret-tool not found (install libsecret)"
+
+# Account name comes from the config file, or FVPN_ACCOUNT for a one-off.
+account="${FVPN_ACCOUNT:-}"
+if [[ -z "$account" && -r "$CONF" ]]; then
+    account="$(sed -n 's/^[[:space:]]*VPN_USERNAME=["'\'']\?\([^"'\'']*\)["'\'']\?[[:space:]]*$/\1/p' "$CONF" | head -1)"
+fi
+[[ -n "$account" ]] || die "no account name; set VPN_USERNAME in $CONF or export FVPN_ACCOUNT"
+
+case "${1:-}" in
+    store)
+        # secret-tool reads the value from stdin, so it stays out of argv.
+        printf 'FastestVPN password for %s: ' "$account" >&2
+        IFS= read -rs password
+        printf '\n' >&2
+        [[ -n "$password" ]] || die "password was empty"
+        printf '%s' "$password" \
+          | secret-tool store --label="FastestVPN ($account)" \
+              service "$SERVICE" account "$account"
+        unset password
+        echo "stored in keyring for $account"
+        ;;
+    status)
+        if secret-tool lookup service "$SERVICE" account "$account" >/dev/null 2>&1; then
+            echo "credential present for $account"
+        else
+            echo "no credential stored for $account"; exit 1
+        fi
+        ;;
+    forget)
+        secret-tool clear service "$SERVICE" account "$account" 2>/dev/null || true
+        echo "cleared keyring entry for $account"
+        ;;
+    *)
+        echo "usage: ${0##*/} {store|status|forget}" >&2; exit 2 ;;
+esac

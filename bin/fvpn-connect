@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# fvpn-connect — bring up a FastestVPN NetworkManager profile
+#
+#   fvpn-connect fvpn-uk2
+#   fvpn-connect --down            disconnect any active VPN
+#
+# The password is piped from the desktop keyring straight into nmcli's
+# passwd-file on stdin. It never appears in argv, never reaches a shell
+# variable, and is never written to disk.
+#
+# Requires no privilege: NetworkManager's polkit default for
+# org.freedesktop.NetworkManager.network-control is allow_active=yes.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+CONF="${FVPN_CONF:-${HOME}/Dev/fastestvpn/fastestvpn.conf}"
+SERVICE=fastestvpn
+# nmcli's wait, then a grace period. NetworkManager's own VPN connect timeout
+# is 60s, so giving up at 20 meant reporting failure while NM was still
+# negotiating — a slow handshake looked identical to a dead server.
+WAIT_SECS=40
+GRACE_SECS=25
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+command -v nmcli       >/dev/null || die "nmcli not found"
+command -v secret-tool >/dev/null || die "secret-tool not found (install libsecret)"
+
+# ── Disconnect any active VPN ───────────────────────────────────────────────
+down_active_vpns() {
+    local uuid type
+    while IFS=: read -r uuid type; do
+        [[ "$type" == "vpn" ]] || continue
+        [[ "$uuid" == "${1:-}" ]] && continue
+        nmcli connection down uuid "$uuid" >/dev/null 2>&1 \
+          || die "could not disconnect the active VPN session"
+    done < <(nmcli --terse --fields UUID,TYPE connection show --active)
+}
+
+if [[ "${1:-}" == "--down" ]]; then
+    down_active_vpns ""
+    echo "disconnected"
+    exit 0
+fi
+
+conn="${1:-}"
+[[ -n "$conn" ]] || { echo "usage: ${0##*/} <connection-name> | --down" >&2; exit 2; }
+
+# Validate before use: the name reaches nmcli and must not be a stray path or
+# option. Leading alphanumeric rules out '..' and '-'-prefixed flags.
+[[ "$conn" =~ ^fvpn-[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
+  || die "invalid connection name: $conn"
+
+uuid="$(nmcli -g connection.uuid connection show id "$conn" 2>/dev/null)" \
+  || die "no such connection: $conn"
+[[ "$uuid" =~ ^[0-9a-fA-F-]{36}$ ]] || die "unexpected uuid for $conn"
+
+[[ "$(nmcli -g connection.type connection show uuid "$uuid" 2>/dev/null)" == "vpn" ]] \
+  || die "$conn is not a VPN connection"
+
+# Account name, in order of preference:
+#   1. FVPN_ACCOUNT      - explicit override
+#   2. the NM connection - `username` in vpn.data, set at import time
+#   3. a config file     - legacy, for use outside the plugin
+# Preferring the connection keeps this self-contained: a plugin must not
+# depend on a file that only ever existed in one person's home directory.
+account="${FVPN_ACCOUNT:-}"
+if [[ -z "$account" ]]; then
+    account="$(nmcli -g vpn.data connection show uuid "$uuid" 2>/dev/null \
+        | tr ',' '\n' \
+        | sed -n 's/^[[:space:]]*username[[:space:]]*=[[:space:]]*//p' \
+        | head -1 | tr -d '[:space:]')"
+fi
+if [[ -z "$account" && -r "$CONF" ]]; then
+    account="$(sed -n 's/^[[:space:]]*VPN_USERNAME=["'\'']\?\([^"'\'']*\)["'\'']\?[[:space:]]*$/\1/p' "$CONF" | head -1)"
+fi
+[[ -n "$account" ]] || die "no account name: set username on the connection, or export FVPN_ACCOUNT"
+
+secret-tool lookup service "$SERVICE" account "$account" >/dev/null 2>&1 \
+  || die "no keyring credential for $account — run: fvpn-creds store"
+
+down_active_vpns "$uuid"
+
+# secret-tool's stdout feeds nmcli's stdin directly, so the password is never
+# held in a variable and never appears in the process table.
+# `|| rc=$?` keeps set -e from killing us and captures the real status; with
+# pipefail that is the rightmost failure, i.e. nmcli's or timeout's. Wrapping
+# this in `if ! ...` instead would report $? of the negation, always 0.
+rc=0
+{ printf 'vpn.secrets.password:'
+  secret-tool lookup service "$SERVICE" account "$account"
+  printf '\n'
+} | timeout --signal=TERM "${WAIT_SECS}s" \
+      nmcli --wait $((WAIT_SECS - 5)) connection up uuid "$uuid" passwd-file /dev/stdin \
+  || rc=$?
+
+if (( rc != 0 )); then
+    # nmcli stopped waiting, which is not the same as NM giving up. Only call it
+    # a failure once NM itself is no longer trying.
+    state="$(nmcli -g GENERAL.STATE connection show uuid "$uuid" 2>/dev/null)"
+    if [[ "$state" != activating* ]]; then
+        (( rc == 124 )) && die "timed out after ${WAIT_SECS}s — server did not respond"
+        die "connection failed (rc=$rc)"
+    fi
+    echo "still negotiating, waiting up to ${GRACE_SECS}s more..." >&2
+fi
+
+# nmcli can return while NM still reports "activating"; wait for the real state
+# rather than reporting success on a fork, which is how the old script lied.
+deadline=$(( SECONDS + GRACE_SECS ))
+while (( SECONDS < deadline )); do
+    case "$(nmcli -g GENERAL.STATE connection show uuid "$uuid" 2>/dev/null)" in
+        activated*)  echo "connected: $conn"; exit 0 ;;
+        activating*) sleep 0.5 ;;
+        *)           die "authentication failed or the connection was rejected" ;;
+    esac
+done
+# Leave nothing half-up: a connection stuck activating would otherwise block the
+# next attempt, since down_active_vpns only tears down what is already active.
+nmcli connection down uuid "$uuid" >/dev/null 2>&1 || true
+die "$conn did not finish connecting within $((WAIT_SECS + GRACE_SECS))s"

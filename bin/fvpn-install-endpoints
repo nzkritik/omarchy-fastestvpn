@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# fvpn-install-endpoints — install NetworkManager profiles for new endpoints
+#
+# `fvpn-endpoints sync` updates the catalogue, but importing a profile into
+# NetworkManager needs root, so it cannot happen from the bar. This script is
+# the privileged half: it downloads the current upstream bundle, drops any
+# missing UDP profile into /etc/openvpn, and imports it as fvpn-<id>.
+#
+# Handles no credentials: connections are created at password-flags=2 and the
+# password stays in the desktop keyring.
+#
+#   sudo bash fvpn-install-endpoints            install everything missing
+#   sudo bash fvpn-install-endpoints --dry-run  list what would be installed
+# ---------------------------------------------------------------------------
+set -uo pipefail
+
+TARGET_USER="${SUDO_USER:-user16}"
+OVPN_DIR=/etc/openvpn
+SYSCONN_DIR=/etc/NetworkManager/system-connections
+CERT_DIR=/etc/NetworkManager/certificates/fvpn
+BUNDLE_URL="https://support.fastestvpn.com/download/fastestvpn_ovpn/"
+
+dry=0; reimport=0
+for a in "$@"; do
+    case "$a" in
+        --dry-run)  dry=1 ;;
+        --reimport) reimport=1 ;;
+        *) echo "usage: $0 [--dry-run] [--reimport]" >&2; exit 2 ;;
+    esac
+done
+
+# nmcli escapes ':' and ',' in vpn.data, so unescape before comparing.
+nm_remote() {
+    nmcli -g vpn.data connection show "fvpn-$1" 2>/dev/null \
+      | tr ',' '\n' \
+      | sed -n 's/^[[:space:]]*remote[[:space:]]*=[[:space:]]*//p' \
+      | head -1 | tr -d '\\' | cut -d: -f1
+}
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+[[ $EUID -eq 0 ]] || die "must run as root (sudo bash $0)"
+id -u "$TARGET_USER" >/dev/null 2>&1 || die "no such user: $TARGET_USER"
+command -v python3 >/dev/null || die "python3 required"
+command -v unzip   >/dev/null || die "unzip required"
+[[ -e /usr/lib/NetworkManager/nm-openvpn-service ]] \
+  || [[ -e /usr/lib/NetworkManager/VPN/nm-openvpn-service.name ]] \
+  || die "networkmanager-openvpn is not installed"
+
+VPN_USERNAME="$(nmcli -g vpn.data connection show "$(nmcli -t -f NAME connection show \
+    | grep -m1 '^fvpn-')" 2>/dev/null | tr ',' '\n' \
+    | sed -n 's/^[[:space:]]*username[[:space:]]*=[[:space:]]*//p' | head -1 | tr -d '[:space:]')"
+[[ -n "$VPN_USERNAME" ]] || die "could not determine the VPN username from an existing fvpn-* connection"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+echo "downloading upstream bundle…"
+curl -sL --max-time 90 -A 'Mozilla/5.0' "$BUNDLE_URL" -o "$tmp/bundle.zip" \
+  || die "download failed"
+head -c2 "$tmp/bundle.zip" | grep -q PK || die "upstream did not return a zip"
+unzip -qq -o "$tmp/bundle.zip" -d "$tmp/x" || die "unzip failed"
+
+# Locally generated configs (site-listed hosts with no upstream .ovpn) are
+# installed alongside the bundle's.
+GEN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../data/generated" 2>/dev/null && pwd || true)"
+if [[ -n "$GEN_DIR" && -d "$GEN_DIR" ]]; then
+    cp -n "$GEN_DIR"/*.ovpn "$tmp/x/" 2>/dev/null || true
+    echo "including $(ls "$GEN_DIR"/*.ovpn 2>/dev/null | wc -l) generated config(s)"
+fi
+
+# Prefer UDP, but some endpoints are published TCP-only (br-04), so fall back
+# rather than skipping them.
+# Missing connections, plus — with --reimport — any whose remote has drifted
+# from the bundle. `sync` updates the catalogue but cannot rewrite an existing
+# NM connection, so an endpoint upstream has moved keeps dialling the old host.
+mapfile -t missing < <(
+  find "$tmp/x" -name '*.ovpn' -printf '%f\n' \
+  | sed -E 's/-(udp|tcp)\.ovpn$//' | sort -u \
+  | while read -r p; do
+      if ! nmcli -t -f NAME connection show 2>/dev/null | grep -qx "fvpn-$p"; then
+          echo "$p"; continue
+      fi
+      (( reimport )) || continue
+      want="$(grep -m1 '^remote ' "$(find "$tmp/x" -name "${p}-udp.ovpn" -o -name "${p}-tcp.ovpn" | head -1)" 2>/dev/null | awk '{print $2}')"
+      have="$(nm_remote "$p")"
+      if [[ -n "$want" && -n "$have" && "${want,,}" != "${have,,}" ]]; then
+          echo "  stale: fvpn-$p dials $have, bundle says $want" >&2
+          echo "$p"
+      fi
+    done
+)
+
+if (( ${#missing[@]} == 0 )); then
+    echo "nothing to install — every upstream endpoint already has a connection"
+    exit 0
+fi
+
+printf 'missing connections (%d): %s\n' "${#missing[@]}" "${missing[*]}"
+if (( dry )); then echo "(dry run — nothing changed)"; exit 0; fi
+
+install -d -m 0755 -o root -g root "$CERT_DIR"
+installed=0; failed=0
+
+for p in "${missing[@]}"; do
+    proto=udp
+    src="$(find "$tmp/x" -name "${p}-udp.ovpn" | head -1)"
+    if [[ ! -r "$src" ]]; then
+        proto=tcp
+        src="$(find "$tmp/x" -name "${p}-tcp.ovpn" | head -1)"
+    fi
+    [[ -r "$src" ]] || { echo "  SKIP $p (no udp or tcp profile)"; (( failed++ )); continue; }
+
+    install -m 0644 -o root -g root "$src" "${OVPN_DIR}/${p}-${proto}.ovpn"
+    # Keep the other variant on disk too, so a protocol switch needs no re-download.
+    other=$([[ "$proto" == udp ]] && echo tcp || echo udp)
+    alt="$(find "$tmp/x" -name "${p}-${other}.ovpn" | head -1)"
+    [[ -r "$alt" ]] && install -m 0644 -o root -g root "$alt" "${OVPN_DIR}/${p}-${other}.ovpn"
+
+    # Drop the outdated connection so the import recreates it with the new remote.
+    if (( reimport )); then
+        while nmcli -t -f NAME connection show 2>/dev/null | grep -qx "fvpn-$p"; do
+            nmcli connection delete id "fvpn-$p" >/dev/null 2>&1 || break
+        done
+    fi
+
+    staged="${p}-${proto}"
+    while nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$staged"; do
+        nmcli connection delete id "$staged" >/dev/null 2>&1 || break
+    done
+    if ! nmcli connection import type openvpn file "${OVPN_DIR}/${p}-${proto}.ovpn" >/dev/null 2>&1; then
+        echo "  FAIL $p (import)"; (( failed++ )); continue
+    fi
+    nmcli connection modify id "$staged" connection.id "fvpn-$p"                     >/dev/null 2>&1
+    nmcli connection modify id "fvpn-$p" connection.autoconnect no                   >/dev/null 2>&1
+    nmcli connection modify id "fvpn-$p" connection.permissions "user:${TARGET_USER}" >/dev/null 2>&1
+    echo "  ok   fvpn-$p"
+    (( installed++ ))
+done
+
+echo
+echo "fixing certs, username and secret flags…"
+CERT_DIR="$CERT_DIR" SYSCONN_DIR="$SYSCONN_DIR" VPN_USERNAME="$VPN_USERNAME" python3 <<'PY'
+import configparser, glob, os, shutil
+cdir = os.path.normpath(os.environ["CERT_DIR"])
+user = os.environ["VPN_USERNAME"]
+for kf in sorted(glob.glob(os.path.join(os.environ["SYSCONN_DIR"], "*.nmconnection"))):
+    cp = configparser.RawConfigParser(); cp.optionxform = str
+    try:
+        with open(kf, encoding="utf-8") as fh: cp.read_file(fh)
+    except Exception:
+        continue
+    if not cp.has_section("connection"): continue
+    if not cp.get("connection", "id", fallback="").startswith("fvpn-"): continue
+    if not cp.has_section("vpn"): continue
+    changed = False
+    for key in ("ca", "ta"):
+        src = cp.get("vpn", key, fallback="")
+        if not src: continue
+        if src.startswith("/root/"):
+            dst = os.path.join(cdir, os.path.basename(src))
+            if os.path.isfile(src): shutil.move(src, dst)
+            if os.path.isfile(dst):
+                os.chmod(dst, 0o644); os.chown(dst, 0, 0)
+                cp.set("vpn", key, dst); changed = True
+        elif os.path.dirname(os.path.normpath(src)) == cdir and os.path.isfile(src):
+            os.chmod(src, 0o644); os.chown(src, 0, 0)
+    if cp.get("vpn", "username", fallback="") != user:
+        cp.set("vpn", "username", user); changed = True
+    if cp.get("vpn", "password-flags", fallback="") != "2":
+        cp.set("vpn", "password-flags", "2"); changed = True
+    if cp.has_section("vpn-secrets"):
+        cp.remove_section("vpn-secrets"); changed = True
+    if not changed: continue
+    tmp = kf + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        cp.write(fh, space_around_delimiters=False)
+    os.chmod(tmp, 0o600); os.chown(tmp, 0, 0)
+    os.replace(tmp, kf)
+print("  done")
+PY
+
+nmcli connection reload
+echo
+printf 'installed: %d   failed: %d\n' "$installed" "$failed"
+echo "total fvpn-* connections: $(nmcli -t -f NAME connection show | grep -c '^fvpn-')"
+echo
+echo "Now re-run the catalogue enrichment as your user:"
+echo "  ~/.config/omarchy/plugins/nzkritik.fastestvpn/bin/fvpn-endpoints enrich"
