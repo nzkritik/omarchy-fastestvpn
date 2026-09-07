@@ -35,10 +35,43 @@ out boot-time autoconnect and headless SSH activation.
 
 ## Setup
 
+Everything after the package install is done from the plugin's own settings
+screen — the gear in the panel header.
+
 1. `omarchy pkg add networkmanager-openvpn`
-2. Import the `.ovpn` profiles as `fvpn-<location>` NetworkManager connections
-   (`autoconnect no`, scoped to your user).
-3. `bin/fvpn-creds store`
+2. Open the panel, click the gear, and fill in:
+   - **FastestVPN account** — the account your password belongs to.
+   - **Password** — stored in the keyring, never in `shell.json`.
+   - **OpenVPN profile directory** — defaults to
+     `~/.local/share/fastestvpn/profiles`.
+3. **Refresh profiles** downloads FastestVPN's current bundle into that
+   directory. **Add profiles…** copies in `.ovpn` files of your own; those
+   appear in the list like any other location once imported.
+4. **Import profiles** creates the NetworkManager connections. This is the only
+   step that asks for your password.
+5. **Locate new** runs automatically after an import, and fills in where each
+   endpoint is.
+
+## Availability
+
+Locations are never tested in the background. Every test would spend an
+authentication against the account, and FastestVPN rate-limits: a bulk sweep
+during development got the account blocked for the better part of a day.
+
+So an endpoint is judged only when you actually ask to connect to it, and only
+two outcomes mark it unavailable — the server not answering, or a tunnel that
+comes up without a usable address. A rejected password never does, because
+FastestVPN returns `AUTH_FAILED` both for bad credentials *and* for too many
+open sessions; treating that as a server fault would condemn healthy endpoints
+the moment the account is throttled.
+
+Verdicts live in `~/.local/state/fastestvpn/endpoints.json`. Hovering a row
+shows what happened last time. Selecting an unavailable location and pressing
+**Retry** clears its verdict first, so nothing is condemned permanently.
+
+Clicking a location only selects it — a **Connect** button appears on the
+selected row. Connecting is never one stray click away, because on this
+provider an attempt is not free.
 
 ## Location data
 
@@ -46,20 +79,25 @@ out boot-time autoconnect and headless SSH activation.
 location — where you appear to the internet.
 
 - `precision: "measured"` — observed by connecting and geolocating the exit IP.
+  These win over any later IP lookup.
+- `precision: "server"` — from `fvpn-geolocate`, i.e. where the endpoint's own
+  address is registered. This is where you *enter* the network, which is
+  usually but not always where you appear.
 - `precision: "city"` / `"country"` — inferred from the profile name or server
-  hostname, not measured.
-- `reachable: false` — the endpoint did not answer a probe of its own
-  `host:port`. A little over a third of FastestVPN's advertised locations were
-  dead when this data was gathered; the widget hides them by default
-  (`hideDeadEndpoints`).
+  hostname, not measured. Shown as "approx." in the list.
+- `status` / `reachable` — legacy fields from a background probe that is no
+  longer run and whose results proved unreliable. They are informational only
+  and gate nothing; availability comes from real connection attempts.
 - `countryMismatch` — the exit geolocates to a different country than the label
   claims (a "virtual location"). The UI says so rather than quietly plotting one
   country under another's name.
 - `via` — for double-hop profiles, the entry node actually dialled. The map
   draws entry → exit as a dashed link, suppressed when the two coincide.
 
-Coordinates can be re-measured with `fvpn-measure-locations` and folded back in
-with `fvpn-merge-measurements`.
+Coordinates come from `bin/fvpn-geolocate` (see below). Where an entry was
+previously measured by connecting and reading the real exit address, that
+measurement wins over the IP lookup — the two answer different questions, and
+the measured one is the truth about where you appear.
 
 
 ## Keeping endpoints current
@@ -69,22 +107,42 @@ FastestVPN publishes its OpenVPN bundle at
 the support site's server table, which lists only a fraction of the fleet — is
 the authoritative endpoint list.
 
-    bin/fvpn-endpoints check     # what changed upstream
-    bin/fvpn-endpoints sync      # merge upstream into the catalogue
-    bin/fvpn-endpoints enrich    # resolve, probe and geolocate anything missing
-    bin/fvpn-endpoints status    # summary
+The profile directory set in the plugin's settings is the source of truth for
+which endpoints exist. Everything below is reachable from the settings screen;
+the scripts are the same ones those buttons run.
 
-The **Update** button in the panel runs `sync` then `enrich`.
+    bin/fvpn-fetch-profiles          # download the bundle into the profile dir
+    bin/fvpn-geolocate               # locate any endpoint not located yet
+    bin/fvpn-geolocate --all         # locate every endpoint again
 
-Enrichment geolocates each server's own IP rather than connecting through it.
-That is deliberate: learning where 70 endpoints are by tunnelling through each
-in turn would hijack the network for minutes. Spot-checked against a live
-measurement — for `uk2` both methods return `51.5085,-0.1257`.
+Neither connects to a VPN. `fvpn-geolocate` resolves each profile's `remote`
+host and looks the IP up with ip2location.io, so it learns where a server is
+without tunnelling through it — doing that for 70 endpoints would hijack the
+network for minutes and, worse, spend an account authentication per endpoint.
+One lookup is made per unique IP rather than per file, so the UDP and TCP
+variants of an endpoint share it: 134 profiles cost about 64 of the API's 1000
+free daily calls. It is incremental by default, and also re-locates any host
+that has since moved to a different IP.
 
-Installing a *new* endpoint's profile needs root, so it is a separate step:
+Importing into NetworkManager needs root, so it is a separate step and the only
+one that ever raises a password prompt:
 
-    sudo bash bin/fvpn-install-endpoints --dry-run
-    sudo bash bin/fvpn-install-endpoints
+    pkexec bash bin/fvpn-import-profiles --dir <profile-dir> \
+        --user "$(id -un)" --account <vpn-account> --dry-run
+
+Reads of the profile directory are performed *as the invoking user* via
+`runuser`, so a symlink planted in that user-writable directory cannot walk root
+into a file it should not read.
+
+To start over — remove every `fvpn-*` connection, the installed profiles and
+their certificates:
+
+    pkexec bash bin/fvpn-wipe --dry-run
+    pkexec bash bin/fvpn-wipe --yes
+
+`bin/fvpn-endpoints` is a legacy catalogue tool from an earlier design that
+probed endpoints in the background. Nothing in the plugin calls it, and its
+probe results are not trusted — see *Availability* above.
 
 ## Filters and selectability
 
@@ -99,15 +157,11 @@ toggle does not filter — it selects a *different connection*:
 
 Each chip shows how many locations are available on that transport, and is
 dimmed when none are. Switching while connected disconnects first, so the bar
-never shows a stale transport. Install the TCP side with:
+never shows a stale transport. Both transports are imported together, since the
+bundle ships a `-udp` and a `-tcp` profile for every endpoint.
 
-    sudo bash bin/fvpn-install-tcp --dry-run
-    sudo bash bin/fvpn-install-tcp
-
-`--remove` deletes them again.
-
-A location is selectable only when it is both fully identified — resolved host,
-reachable port, known coordinates — and imported on this machine. Anything else
+A location is selectable when it is imported on this machine and has not failed
+a connection attempt. Anything else
 is listed greyed with the reason (`unreachable`, `no location`, `checking…`,
 `not imported`) and cannot be clicked, so a half-known endpoint is never a
 silent 20-second timeout.
