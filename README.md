@@ -118,3 +118,12 @@ silent 20-second timeout.
 from [OmaMullvad](https://github.com/kallupx/oma-mullvad) by kallupx, MIT
 licensed — see `LICENSE.oma-mullvad`. The underlying Natural Earth 1:110m land
 data is public domain. The multi-hop link rendering is an addition.
+
+`data/countries.json` holds per-country outlines used to highlight and frame the
+connected country. It is generated from [Natural Earth]
+(https://www.naturalearthdata.com/) 1:110m Admin 0 countries — public domain,
+no permission or attribution required — reprojected into the same
+equirectangular 1000x500 space as the base map, rounded to one decimal, and
+stripped of everything but an ISO 3166-1 alpha-2 key, the outline path, and the
+bounding boxes of each landmass. That last part is what lets the camera frame
+the mainland United States rather than a box stretching from Alaska to Florida.
