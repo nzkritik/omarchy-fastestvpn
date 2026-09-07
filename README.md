@@ -50,9 +50,8 @@ and headless SSH activation.
 
 ## Availability
 
-Locations are never tested in the background. Each test spends an
-authentication against your account, and FastestVPN rate-limits — a bulk sweep
-during development got the account blocked for most of a day.
+Locations are never tested in the background. This avoids triggering
+concurrency or rate-limits on your account.
 
 An endpoint is therefore judged only when you ask to connect to it, and only
 two outcomes mark it unavailable: the server not answering, or a tunnel that
@@ -113,6 +112,11 @@ into a file it should not read.
 from [OmaMullvad](https://github.com/kallupx/oma-mullvad) by kallupx, MIT
 licensed — see `LICENSE.oma-mullvad`. The multi-hop link rendering is an
 addition.
+
+Endpoint IP addresses are geolocated by
+[ip2location.io](https://api.ip2location.io), which fits easily inside their
+free allowance of 1000 queries a day — one full run of `bin/fvpn-geolocate`
+costs about 64.
 
 `data/countries.json` is generated from
 [Natural Earth](https://www.naturalearthdata.com/) 1:110m Admin 0 countries
