@@ -60,9 +60,11 @@ for src in "$tmp"/x/*.ovpn; do
         echo "  skip (bad name): $base"; continue
     }
     dst="$dir/$base"
-    if [[ -e "$dst" ]] && cmp -s "$src" "$dst"; then (( same++ )); continue; fi
+    # Assignment, not (( n++ )): post-increment evaluates to the OLD value, so
+    # the first increment from zero returns 1 and set -e kills the script.
+    if [[ -e "$dst" ]] && cmp -s "$src" "$dst"; then same=$((same + 1)); continue; fi
     (( dry )) || install -m 0644 "$src" "$dst"
-    (( added++ ))
+    added=$((added + 1))
 done
 
 if (( dry )); then

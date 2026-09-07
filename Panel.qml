@@ -45,7 +45,7 @@ Panel {
   readonly property bool hideUnavailable: setting("hideUnavailable", true) !== false
 
   readonly property var rows: {
-    var all = service ? service.locations : []
+    var all = service ? service.allLocations : []
     var q = query.trim().toLowerCase()
     var out = []
     for (var i = 0; i < all.length; i++) {
@@ -65,6 +65,16 @@ Panel {
       }
       out.push(l)
     }
+    return out
+  }
+
+  // A profile the user added themselves has no coordinates, so it belongs in
+  // the list but cannot be plotted. Filtering here rather than inside WorldMap
+  // keeps the map free of "what if there is no position" special cases.
+  readonly property var mappable: {
+    var out = []
+    for (var i = 0; i < rows.length; i++)
+      if (isFinite(rows[i].latitude) && isFinite(rows[i].longitude)) out.push(rows[i])
     return out
   }
 
@@ -102,7 +112,7 @@ Panel {
         label: l ? l.label : "",
         country: l ? l.country : "",
         city: l ? l.city : "",
-        catalogue: root.service.locations.length,
+        catalogue: root.service.allLocations.length,
         selectable: root.service.liveCount,
         unavailable: root.service.unavailableCount,
         notImported: root.service.notInstalledCount,
@@ -275,8 +285,9 @@ Panel {
         WorldMap {
           anchors.fill: parent
           anchors.margins: Style.space(4)
-          locations: root.rows
-          connectedPoint: root.service && root.service.connected ? root.activeLoc : null
+          locations: root.mappable
+          connectedPoint: root.service && root.service.connected && root.activeLoc
+                          && isFinite(root.activeLoc.latitude) ? root.activeLoc : null
           foreground: root.foreground
           accent: root.accent
         }
@@ -306,8 +317,8 @@ Panel {
             readonly property int count: {
               if (!root.service) return 0
               var n = 0
-              for (var i = 0; i < root.service.locations.length; i++) {
-                var l = root.service.locations[i]
+              for (var i = 0; i < root.service.allLocations.length; i++) {
+                var l = root.service.allLocations[i]
                 if (!l.retired && root.service.hasTransport(l.id, modelData)) n++
               }
               return n
@@ -420,6 +431,7 @@ Panel {
                 visible: text !== ""
                 text: {
                   var bits = []
+                  if (row.modelData.custom) return "added by you"
                   if (row.modelData.city) bits.push(row.modelData.city)
                   if (row.modelData.precision !== "measured") bits.push("approx.")
                   if (row.modelData.countryMismatch)

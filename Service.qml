@@ -75,20 +75,20 @@ Item {
 
   readonly property int liveCount: {
     var n = 0
-    for (var i = 0; i < locations.length; i++)
-      if (isSelectable(locations[i])) n++
+    for (var i = 0; i < allLocations.length; i++)
+      if (isSelectable(allLocations[i])) n++
     return n
   }
   readonly property int notInstalledCount: {
     var n = 0
-    for (var i = 0; i < locations.length; i++)
-      if (!locations[i].retired && !hasTransport(locations[i].id, transport)) n++
+    for (var i = 0; i < allLocations.length; i++)
+      if (!allLocations[i].retired && !hasTransport(allLocations[i].id, transport)) n++
     return n
   }
   readonly property int unavailableCount: {
     var n = 0
-    for (var i = 0; i < locations.length; i++)
-      if (isUnavailable(locations[i].id)) n++
+    for (var i = 0; i < allLocations.length; i++)
+      if (isUnavailable(allLocations[i].id)) n++
     return n
   }
 
@@ -111,8 +111,9 @@ Item {
 
   function locationById(id) {
     if (!id) return null
-    for (var i = 0; i < locations.length; i++)
-      if (locations[i].id === id) return locations[i]
+    var all = allLocations
+    for (var i = 0; i < all.length; i++)
+      if (all[i].id === id) return all[i]
     return null
   }
 
@@ -282,6 +283,38 @@ Item {
   // Which transport the user has chosen. A NetworkManager connection's protocol
   // is fixed at import, so switching means using a different connection.
   property string transport: "udp"
+
+  // Connections that exist here but are absent from the shipped catalogue —
+  // which is exactly what a profile the user dropped in themselves looks like.
+  // Without this they would import fine and then never appear in the list,
+  // making "add your own .ovpn" a feature that silently does nothing.
+  // They carry no coordinates, so the map skips them and the list does not.
+  readonly property var extraLocations: {
+    var out = []
+    var seen = ({})
+    for (var i = 0; i < locations.length; i++) seen[locations[i].id] = true
+    var ids = []
+    for (var a in installedIds) if (!seen[a]) ids.push(a)
+    for (var b in tcpIds) if (!seen[b] && ids.indexOf(b) < 0) ids.push(b)
+    ids.sort()
+    for (var j = 0; j < ids.length; j++) {
+      out.push({
+        id: ids[j],
+        connection: "fvpn-" + ids[j],
+        label: ids[j],
+        country: "", countryCode: "", city: "",
+        latitude: NaN, longitude: NaN,
+        precision: "none", kind: "custom", protocols: ["udp"],
+        status: "", retired: false, variantOf: "",
+        countryMismatch: null, via: null,
+        custom: true
+      })
+    }
+    return out
+  }
+
+  // Everything user-facing iterates this, not `locations`.
+  readonly property var allLocations: locations.concat(extraLocations)
 
   function isInstalled(id) {
     return installedIds ? installedIds[id] === true : false
