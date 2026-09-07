@@ -253,6 +253,56 @@ ColumnLayout {
         }
       }
 
+      // ── Locations ───────────────────────────────────────────────────────
+      ColumnLayout {
+        Layout.fillWidth: true
+        spacing: Style.space(4)
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(8)
+          FieldLabel { text: "ENDPOINT LOCATIONS" }
+          FieldLabel {
+            text: cfg.service ? (cfg.service.geoCount + " located") : ""
+          }
+          Item { Layout.fillWidth: true }
+        }
+
+        RowLayout {
+          Layout.fillWidth: true
+          spacing: Style.space(6)
+
+          Button {
+            text: "Locate new"
+            enabled: cfg.service && !cfg.service.updating
+            ToolTip.visible: hovered
+            ToolTip.text: "Look up where each new endpoint's server is.\n"
+                        + "Runs automatically after an import."
+            onClicked: if (cfg.service) cfg.service.geolocate(false)
+          }
+
+          Button {
+            text: "Re-locate all"
+            enabled: cfg.service && !cfg.service.updating
+            ToolTip.visible: hovered
+            ToolTip.text: "Look every endpoint up again, even ones already known."
+            onClicked: if (cfg.service) cfg.service.geolocate(true)
+          }
+
+          Item { Layout.fillWidth: true }
+        }
+
+        FieldLabel {
+          Layout.fillWidth: true
+          wrapMode: Text.WordWrap
+          text: "Each server's own IP address is looked up with ip2location.io. "
+              + "Your traffic is never routed through the endpoint to find out "
+              + "where it is, so this costs nothing against your VPN account. "
+              + "The API allows 1000 lookups a day and one run needs about one "
+              + "per endpoint."
+        }
+      }
+
       // ── Availability ────────────────────────────────────────────────────
       ColumnLayout {
         Layout.fillWidth: true

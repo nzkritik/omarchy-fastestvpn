@@ -314,7 +314,145 @@ Item {
   }
 
   // Everything user-facing iterates this, not `locations`.
-  readonly property var allLocations: locations.concat(extraLocations)
+  //
+  // The geo table fills in position for everything the catalogue does not
+  // already KNOW, but it does not overrule what was measured by connecting.
+  //
+  // The two answer different questions. Geolocating the server's IP says where
+  // you ENTER the provider's network; connecting through it and looking at the
+  // exit address says where you APPEAR. Usually the same place — but `russia`
+  // registers in Moscow and exits in Stockholm, and `switzerland-via-usa`
+  // enters at Chicago and exits in Los Angeles. Letting the cheap lookup
+  // overwrite a measured exit would silently replace a fact with a guess, so
+  // `precision: "measured"` entries keep their coordinates and only pick up
+  // the network details.
+  readonly property var allLocations: {
+    var base = locations.concat(extraLocations)
+    if (!geoById) return base
+    var out = []
+    for (var i = 0; i < base.length; i++) {
+      var l = base[i]
+      var g = geoById[l.id]
+      if (!g) { out.push(l); continue }
+      var m = ({})
+      for (var k in l) m[k] = l[k]
+      m.ip = g.ip
+      m.asName = g.asName
+      m.endpointHost = g.endpoint
+      m.entryCity = g.city
+      m.entryCountryCode = g.countryCode
+      if (l.precision !== "measured") {
+        m.latitude = g.latitude
+        m.longitude = g.longitude
+        if (g.city) m.city = g.city
+        if (g.country) m.country = g.country
+        if (g.countryCode) m.countryCode = g.countryCode
+        m.region = g.region
+        // Located from the server's own address, not by connecting through it.
+        m.precision = "server"
+      }
+      out.push(m)
+    }
+    return out
+  }
+
+  // ── Endpoint geolocation ──────────────────────────────────────────────────
+  // Built by bin/fvpn-geolocate from each profile's remote host. Keyed by
+  // catalogue id: the udp and tcp variants of an endpoint share a server, so
+  // they share a location.
+  property var geoById: ({})
+  property int geoCount: 0
+  readonly property string geoBin: pluginDir + "bin/fvpn-geolocate"
+  readonly property string geoFile: {
+    var base = Quickshell.env("XDG_DATA_HOME")
+    if (!base || base === "") base = Quickshell.env("HOME") + "/.local/share"
+    return base + "/fastestvpn/endpoints-geo.json"
+  }
+
+  Process {
+    id: geoLoadProcess
+    running: false
+    command: ["dd", "if=" + root.geoFile, "iflag=nofollow,nonblock",
+              "bs=65536", "count=16"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var parsed = null
+        try { parsed = JSON.parse(text) } catch (e) { return }
+        var rows = (parsed && parsed.rows) || []
+        var out = ({})
+        var n = 0
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i]
+          if (!r || typeof r.id !== "string") continue
+          if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(r.id)) continue
+          var lat = Number(r.latitude), lon = Number(r.longitude)
+          if (!isFinite(lat) || !isFinite(lon)) continue
+          if (lat < -90 || lat > 90 || lon < -180 || lon > 180) continue
+          if (out[r.id]) continue          // udp and tcp rows agree; take the first
+          out[r.id] = {
+            latitude: lat,
+            longitude: lon,
+            city: String(r.city_name || ""),
+            region: String(r.region_name || ""),
+            country: String(r.country_name || ""),
+            countryCode: String(r.country_code || ""),
+            ip: String(r.ip || ""),
+            asName: String(r["as"] || ""),
+            endpoint: String(r.endpoint || "")
+          }
+          n++
+        }
+        root.geoById = out
+        root.geoCount = n
+      }
+    }
+    onExited: function (code) {
+      if (code !== 0) { root.geoById = ({}); root.geoCount = 0 }
+    }
+  }
+
+  function reloadGeo() {
+    if (geoLoadProcess.running) return
+    geoLoadProcess.running = true
+  }
+
+  // Locate endpoints that have no entry yet. Safe to run at any time: it asks
+  // a geolocation API about each server's IP and never connects to a VPN, so
+  // it spends no authentication against the account.
+  Process {
+    id: geoProcess
+    running: false
+    command: []
+    stdout: SplitParser {
+      // The script prints one line per lookup; surface the last as progress.
+      onRead: function (line) {
+        var t = String(line).trim()
+        if (t.indexOf("[") === 0) root.updateStatus = t
+      }
+    }
+    stderr: StdioCollector {
+      onStreamFinished: {
+        var msg = String(text).trim()
+        if (msg !== "") root.lastError = msg
+      }
+    }
+    onExited: function (code) {
+      root.updating = false
+      root.updateStatus = code === 0 ? "Locations updated" : "Could not locate endpoints"
+      root.reloadGeo()
+    }
+  }
+
+  function geolocate(all) {
+    if (updating || profileDir === "") return
+    root.lastError = ""
+    root.updating = true
+    root.updateStatus = "Locating endpoints…"
+    var cmd = [root.geoBin, "--dir", root.profileDir]
+    if (all === true) cmd.push("--all")
+    geoProcess.command = cmd
+    geoProcess.running = true
+  }
 
   function isInstalled(id) {
     return installedIds ? installedIds[id] === true : false
@@ -595,6 +733,10 @@ Item {
                         : (code === 126 || code === 127) ? "Import cancelled"
                         : "Import failed"
       root.refreshInstalled()
+      // A fresh import is the moment new endpoints appear, and locating them
+      // costs nothing but an API call each — so do it now rather than leaving
+      // the map empty until the user finds the button.
+      if (code === 0) root.geolocate(false)
     }
   }
 
@@ -704,6 +846,7 @@ Item {
   Component.onCompleted: {
     reloadLocations()
     reloadEndpointState()
+    reloadGeo()
     refreshInstalled()
     refresh()
   }

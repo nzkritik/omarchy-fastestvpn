@@ -1,0 +1,293 @@
+#!/usr/bin/env python3
+"""fvpn-geolocate — build the endpoint location table from server IPs.
+
+    fvpn-geolocate [--dir DIR] [--table FILE] [--all] [--delay S] [--limit N]
+                   [--dry-run]
+
+Resolves each .ovpn profile's `remote` host to an IP and asks ip2location.io
+where that IP is. It geolocates the SERVER, never the tunnel: nothing here
+connects to a VPN, so it costs no authentication against the account and can
+run freely. (Locating by connecting through each endpoint is what got the
+account rate-limited once already — don't reintroduce it.)
+
+Incremental by default: only profiles missing from the table, or whose host now
+resolves to a different IP, are looked up. Pass --all to redo everything.
+
+The API allows 1000 queries a day unauthenticated. One call is made per unique
+IP, not per file, so the udp and tcp variants of an endpoint share a lookup —
+134 profiles cost about 67 calls. --limit caps a run regardless.
+"""
+
+import argparse
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+
+API = "https://api.ip2location.io/?ip="
+MAX_BYTES = 262144          # a profile is ~4KB; bounds a swollen or endless file
+ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
+
+
+def die(msg):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def default_dir():
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "fastestvpn", "profiles")
+
+
+def default_table():
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "fastestvpn", "endpoints-geo.json")
+
+
+def read_profile(path):
+    """Read a profile with nofollow, so a symlink planted in the (user-writable)
+    profile directory cannot redirect this read somewhere else."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    try:
+        return os.read(fd, MAX_BYTES).decode("utf-8", "replace")
+    finally:
+        os.close(fd)
+
+
+def parse_profile(text):
+    """-> (remote_host, protocol). Both come from the profile itself; the
+    filename is only a hint and is wrong for hand-added files."""
+    host, proto = "", ""
+    for line in text.splitlines():
+        line = line.strip()
+        if not host and line.startswith("remote "):
+            parts = line.split()
+            if len(parts) >= 2:
+                host = parts[1]
+        elif not proto and line.startswith("proto "):
+            parts = line.split()
+            if len(parts) >= 2:
+                proto = parts[1].lower()
+    if proto.startswith("tcp"):
+        proto = "tcp"
+    elif proto.startswith("udp"):
+        proto = "udp"
+    return host, proto
+
+
+def id_and_proto(filename, proto_from_file):
+    """Bundle files are <id>-udp.ovpn / <id>-tcp.ovpn. Anything else keeps its
+    stem as the id and takes the protocol from the profile body."""
+    stem = filename[:-5] if filename.endswith(".ovpn") else filename
+    if stem.endswith("-udp"):
+        return stem[:-4], proto_from_file or "udp"
+    if stem.endswith("-tcp"):
+        return stem[:-4], proto_from_file or "tcp"
+    return stem, proto_from_file or "udp"
+
+
+def resolve(host):
+    try:
+        infos = socket.getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError:
+        return ""
+    for info in infos:
+        return info[4][0]
+    return ""
+
+
+def lookup(ip, timeout=20):
+    req = urllib.request.Request(API + ip, headers={"User-Agent": "fvpn-geolocate/1"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        if resp.status != 200:
+            raise OSError(f"HTTP {resp.status}")
+        return json.loads(resp.read(65536).decode("utf-8"))
+
+
+def load_table(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception:
+        return {}
+    rows = doc.get("rows") if isinstance(doc, dict) else None
+    if not isinstance(rows, list):
+        return {}
+    out = {}
+    for r in rows:
+        if isinstance(r, dict) and isinstance(r.get("file"), str):
+            out[r["file"]] = r
+    return out
+
+
+def save_table(path, rows):
+    d = os.path.dirname(path)
+    os.makedirs(d, exist_ok=True)
+    doc = {
+        "schemaVersion": 1,
+        "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source": "api.ip2location.io",
+        "note": "Server IPs geolocated directly. Nothing here was measured "
+                "by connecting through the endpoint.",
+        "rows": sorted(rows, key=lambda r: r.get("file", "")),
+    }
+    fd, tmp = tempfile.mkstemp(dir=d)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, indent=2, sort_keys=True)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
+def main():
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("--dir", default=default_dir())
+    ap.add_argument("--table", default=default_table())
+    ap.add_argument("--all", action="store_true",
+                    help="re-locate every profile, not just new ones")
+    ap.add_argument("--delay", type=float, default=1.0,
+                    help="seconds between API calls (default 1.0)")
+    ap.add_argument("--limit", type=int, default=900,
+                    help="max API calls this run (default 900, daily cap is 1000)")
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    profile_dir = args.dir
+    if not os.path.isdir(profile_dir) or os.path.islink(profile_dir):
+        die(f"not a directory (or is a symlink): {profile_dir}")
+
+    names = sorted(
+        n for n in os.listdir(profile_dir)
+        if n.endswith(".ovpn")
+        and ID_RE.match(n[:-5] or "x")
+        and os.path.isfile(os.path.join(profile_dir, n))
+        and not os.path.islink(os.path.join(profile_dir, n))
+    )
+    if not names:
+        die(f"no .ovpn files in {profile_dir}")
+
+    existing = {} if args.all else load_table(args.table)
+
+    # ── Resolve first, decide second ────────────────────────────────────────
+    # DNS is free; the API call is the budgeted resource. Resolving everything
+    # up front also catches the case where a host has MOVED, which an
+    # incremental run must re-locate even though the file is already in the
+    # table.
+    plan, kept, unresolved = [], [], []
+    for name in names:
+        host, proto_body = parse_profile(read_profile(os.path.join(profile_dir, name)))
+        if not host or not HOST_RE.match(host):
+            unresolved.append((name, "no usable remote line"))
+            continue
+        endpoint_id, proto = id_and_proto(name, proto_body)
+        ip = resolve(host)
+        if not ip:
+            unresolved.append((name, f"{host} does not resolve"))
+            # Keep any previous row: a transient DNS failure should not delete
+            # a location we already knew.
+            if name in existing:
+                kept.append(existing[name])
+            continue
+        prev = existing.get(name)
+        if prev and prev.get("ip") == ip and prev.get("latitude") is not None:
+            kept.append(prev)
+            continue
+        plan.append({"file": name, "id": endpoint_id, "endpoint": host,
+                     "protocol": proto, "ip": ip})
+
+    need_ips = sorted({p["ip"] for p in plan})
+    print(f"profiles          : {len(names)}")
+    print(f"already located   : {len(kept)}")
+    print(f"to locate         : {len(plan)} ({len(need_ips)} unique IPs)")
+    if unresolved:
+        print(f"unresolved        : {len(unresolved)}")
+        for name, why in unresolved[:10]:
+            print(f"  {name}: {why}")
+        if len(unresolved) > 10:
+            print(f"  ... and {len(unresolved) - 10} more")
+
+    if args.dry_run:
+        print("\n(dry run — no API calls made, nothing written)")
+        return 0
+    if not plan:
+        print("nothing to do")
+        return 0
+
+    if len(need_ips) > args.limit:
+        print(f"capping at {args.limit} lookups this run "
+              f"({len(need_ips) - args.limit} left for next time)")
+        need_ips = need_ips[:args.limit]
+
+    # ── Look up each unique IP once ─────────────────────────────────────────
+    geo, failed = {}, 0
+    for i, ip in enumerate(need_ips, 1):
+        try:
+            data = lookup(ip)
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            print(f"  [{i}/{len(need_ips)}] {ip}: {exc}", flush=True)
+            failed += 1
+            data = None
+        if data and data.get("latitude") is not None:
+            geo[ip] = data
+            # flush: stdout is block-buffered when piped, and the plugin reads
+            # these lines as live progress rather than at exit.
+            print(f"  [{i}/{len(need_ips)}] {ip} -> "
+                  f"{data.get('city_name') or '?'}, {data.get('country_name') or '?'}",
+                  flush=True)
+        elif data:
+            # A 200 with no coordinates is usually the quota message.
+            msg = str(data.get("message") or "no location in response")[:120]
+            print(f"  [{i}/{len(need_ips)}] {ip}: {msg}", flush=True)
+            failed += 1
+        if i < len(need_ips):
+            time.sleep(args.delay)
+
+    rows = list(kept)
+    for p in plan:
+        data = geo.get(p["ip"])
+        if not data:
+            # No location this run; keep the old row if there was one so a
+            # failed lookup never loses ground.
+            if p["file"] in existing:
+                rows.append(existing[p["file"]])
+            continue
+        rows.append({
+            "file": p["file"],
+            "id": p["id"],
+            "endpoint": p["endpoint"],
+            "protocol": p["protocol"],
+            "ip": p["ip"],
+            "country_code": data.get("country_code") or "",
+            "country_name": data.get("country_name") or "",
+            "region_name": data.get("region_name") or "",
+            "city_name": data.get("city_name") or "",
+            "latitude": data.get("latitude"),
+            "longitude": data.get("longitude"),
+            # AS is worth keeping: M247 (AS9009) hosts a lot of these and its
+            # IPs are routinely mis-geolocated, so a surprising city on an M247
+            # row deserves less trust than one elsewhere.
+            "asn": str(data.get("asn") or ""),
+            "as": data.get("as") or "",
+            "located_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        })
+
+    save_table(args.table, rows)
+    print(f"\nlocated {len(geo)} IP(s); {failed} failed")
+    print(f"table: {args.table} ({len(rows)} rows)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

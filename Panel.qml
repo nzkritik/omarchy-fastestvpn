@@ -430,12 +430,22 @@ Panel {
                 Layout.fillWidth: true
                 visible: text !== ""
                 text: {
+                  var d = row.modelData
                   var bits = []
-                  if (row.modelData.custom) return "added by you"
-                  if (row.modelData.city) bits.push(row.modelData.city)
-                  if (row.modelData.precision !== "measured") bits.push("approx.")
-                  if (row.modelData.countryMismatch)
-                    bits.push("exits " + row.modelData.countryMismatch.measured)
+                  if (d.city) bits.push(d.city)
+                  // Only a coordinate nobody actually checked deserves the
+                  // hedge: "measured" came from a real connection and "server"
+                  // from the endpoint's own address, but the catalogue's
+                  // country-level fallback is a guess at the country's main
+                  // hosting city.
+                  if (d.precision !== "measured" && d.precision !== "server")
+                    bits.push("approx.")
+                  if (d.countryMismatch)
+                    bits.push("exits " + d.countryMismatch.measured)
+                  else if (d.entryCountryCode && d.countryCode
+                           && d.entryCountryCode !== d.countryCode)
+                    bits.push("enters " + d.entryCountryCode)
+                  if (d.custom) bits.push("added by you")
                   return bits.join("  ·  ")
                 }
                 color: root.dim
