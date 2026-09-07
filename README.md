@@ -20,20 +20,34 @@ half, and it is already on every Omarchy box:
 
 So the running plugin is a plain unprivileged `nmcli` client.
 
-## Setup
+## First run
 
-Everything after the package install happens in the plugin's settings screen —
-the gear in the panel header.
+Installing the plugin downloads nothing. `omarchy plugin add` clones the repo
+and stops there — it never runs code from it, which is what lets you review a
+plugin before enabling it. So setup happens in the panel, from the gear in its
+header.
 
 1. `omarchy pkg add networkmanager-openvpn`
-2. Open the panel, click the gear, and fill in **account**, **password** and the
-   **profile directory** (defaults to `~/.local/share/fastestvpn/profiles`).
-3. **Refresh profiles** downloads FastestVPN's bundle into that directory.
-   **Add profiles…** copies in `.ovpn` files of your own.
-4. **Import profiles** creates the NetworkManager connections. This is the only
-   step that asks for your password.
-5. **Locate new** fills in where each endpoint is. It runs automatically after
-   an import.
+2. Open the panel and click the gear. Fill in your **account**, **Save** the
+   password, and set the **profile directory** if you do not want the default
+   `~/.local/share/fastestvpn/profiles`.
+3. **Refresh profiles** downloads FastestVPN's current bundle into that
+   directory. **Add profiles…** copies in `.ovpn` files of your own; both can
+   be used together.
+4. **Import profiles** turns them into NetworkManager connections. This is the
+   only step that asks for your password.
+
+Locations appear as soon as the import finishes, and **Locate new** runs by
+itself to fill in where each endpoint is.
+
+Until something is imported the panel says so, and names the one step that is
+next rather than reciting all of them:
+
+| Panel says | What to do |
+|---|---|
+| Add your FastestVPN account and password in settings | fill in the account, then **Save** the password |
+| Download FastestVPN's location profiles in settings | **Refresh profiles**, or add your own `.ovpn` files |
+| The profiles are ready. Import them in settings | **Import profiles** |
 
 ## Credentials
 

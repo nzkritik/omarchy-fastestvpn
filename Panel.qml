@@ -82,6 +82,21 @@ Panel {
     return out
   }
 
+  // Nothing imported means there is nothing to show and nothing to click, so
+  // the panel explains what to do instead of presenting an empty list, an
+  // empty map and two filters over nothing.
+  readonly property bool firstRun: !!service && service.locationsLoaded
+                                   && service.installedCount === 0
+
+  // The next thing that needs doing, so the panel names one step rather than
+  // reciting the whole setup.
+  readonly property string firstRunStep: {
+    if (!service) return ""
+    if (service.account === "") return "account"
+    if (service.profileCount === 0) return "profiles"
+    return "import"
+  }
+
   readonly property var activeLoc: service ? service.activeLocation : null
   readonly property var selectedLoc: (service && selectedId)
                                      ? service.locationById(selectedId) : null
@@ -131,6 +146,8 @@ Panel {
         unavailable: root.service.unavailableHereCount,
         unavailableAll: root.service.unavailableCount,
         notImported: root.service.notInstalledCount,
+        firstRun: root.firstRun,
+        firstRunStep: root.firstRunStep,
         shown: root.rows.length,
         lastError: root.service.lastError
       })
@@ -194,7 +211,7 @@ Panel {
         }
 
         Text {
-          visible: text !== "" && !root.configOpen
+          visible: text !== "" && !root.configOpen && !root.firstRun
           text: root.service ? (root.service.importedCount + " locations") : ""
           color: root.dim
           font.family: root.fontFamily
@@ -280,6 +297,7 @@ Panel {
                        + ", not " + l.countryMismatch.claimed
                 return s
               }
+              if (root.firstRun) return "Not set up yet"
               return "Choose a location below"
             }
             color: root.service && root.service.lastError !== "" ? root.urgent : root.dim
@@ -300,7 +318,7 @@ Panel {
 
       // ── Map ───────────────────────────────────────────────────────────────
       Rectangle {
-        visible: !root.configOpen
+        visible: !root.configOpen && !root.firstRun
         Layout.fillWidth: true
         Layout.preferredHeight: Style.space(190)
         radius: Style.space(6)
@@ -325,7 +343,7 @@ Panel {
       // ── Search ────────────────────────────────────────────────────────────
       TextField {
         id: search
-        visible: !root.configOpen
+        visible: !root.configOpen && !root.firstRun
         Layout.fillWidth: true
         placeholderText: "Search locations…"
         onTextChanged: root.query = text
@@ -334,7 +352,7 @@ Panel {
 
       // ── Filter ────────────────────────────────────────────────────────────
       Row {
-        visible: !root.configOpen
+        visible: !root.configOpen && !root.firstRun
         Layout.fillWidth: true
         spacing: Style.space(6)
 
@@ -409,7 +427,7 @@ Panel {
       // ── Locations ─────────────────────────────────────────────────────────
       ListView {
         id: list
-        visible: !root.configOpen
+        visible: !root.configOpen && !root.firstRun
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
@@ -608,6 +626,57 @@ Panel {
         font.family: root.fontFamily
         font.pixelSize: Style.space(10)
         wrapMode: Text.WordWrap
+      }
+
+      // ── First run ─────────────────────────────────────────────────────────
+      // Deliberately names one next step rather than listing the whole setup:
+      // the settings screen already spells it out, and a wall of instructions
+      // in a bar panel is not read.
+      ColumnLayout {
+        visible: root.firstRun && !root.configOpen
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        spacing: Style.space(10)
+
+        Item { Layout.fillHeight: true }
+
+        Text {
+          Layout.fillWidth: true
+          horizontalAlignment: Text.AlignHCenter
+          text: "No locations yet"
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.space(15)
+          font.bold: true
+        }
+
+        Text {
+          Layout.fillWidth: true
+          horizontalAlignment: Text.AlignHCenter
+          wrapMode: Text.WordWrap
+          text: {
+            if (root.firstRunStep === "account")
+              return "Add your FastestVPN account and password in settings, then\n"
+                   + "download the location profiles."
+            if (root.firstRunStep === "profiles")
+              return "Download FastestVPN's location profiles in settings —\n"
+                   + "or drop your own .ovpn files into the profile directory."
+            return "The profiles are ready. Import them in settings to turn them\n"
+                 + "into connections you can use."
+          }
+          color: root.dim
+          font.family: root.fontFamily
+          font.pixelSize: Style.space(11)
+          lineHeight: 1.3
+        }
+
+        Button {
+          Layout.alignment: Qt.AlignHCenter
+          text: root.firstRunStep === "import" ? "Import profiles" : "Open settings"
+          onClicked: root.configOpen = true
+        }
+
+        Item { Layout.fillHeight: true }
       }
 
       // ── Settings ──────────────────────────────────────────────────────────
