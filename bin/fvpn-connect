@@ -55,9 +55,16 @@ record() {
     FVPN_STATE="$STATE_FILE" python3 - <<'PY' 2>/dev/null || true
 import json, os, tempfile, datetime
 path = os.environ["FVPN_STATE"]
+# This path is predictable and under $HOME, so anything running as this user
+# could plant a symlink (redirecting the read) or a FIFO (blocking it forever,
+# which would wedge the caller and leave the panel stuck on "Connecting"). Open
+# it with O_NOFOLLOW|O_NONBLOCK and a byte bound rather than a plain open().
 try:
-    with open(path, encoding="utf-8") as fh:
-        doc = json.load(fh)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        doc = json.loads(os.read(fd, 1048576).decode("utf-8", "replace"))
+    finally:
+        os.close(fd)
     if not isinstance(doc, dict):
         raise ValueError
 except Exception:

@@ -118,9 +118,14 @@ def lookup(ip, timeout=20):
 
 
 def load_table(path):
+    # Guarded like read_profile: the table lives at a predictable path under
+    # $HOME, so a planted symlink or FIFO must not redirect or block this.
     try:
-        with open(path, encoding="utf-8") as fh:
-            doc = json.load(fh)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            doc = json.loads(os.read(fd, 8 * 1024 * 1024).decode("utf-8", "replace"))
+        finally:
+            os.close(fd)
     except Exception:
         return {}
     rows = doc.get("rows") if isinstance(doc, dict) else None

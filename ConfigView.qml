@@ -203,6 +203,8 @@ ColumnLayout {
           spacing: Style.space(6)
 
           Button {
+            // Needs a file picker, which a default Omarchy does not ship.
+            visible: cfg.service && cfg.service.hasPicker
             text: "Add profiles…"
             enabled: cfg.service && !cfg.service.updating
             onClicked: if (cfg.service) cfg.service.browseForProfiles()

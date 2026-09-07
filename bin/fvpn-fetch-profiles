@@ -32,6 +32,7 @@ done
 
 command -v curl  >/dev/null || die "curl required"
 command -v unzip >/dev/null || die "unzip required"
+command -v cksum >/dev/null || die "cksum required (coreutils)"
 
 # Refuse a symlinked destination: this path comes from user settings and is
 # written to, so a link planted here would redirect the whole extraction.
@@ -62,7 +63,13 @@ for src in "$tmp"/x/*.ovpn; do
     dst="$dir/$base"
     # Assignment, not (( n++ )): post-increment evaluates to the OLD value, so
     # the first increment from zero returns 1 and set -e kills the script.
-    if [[ -e "$dst" ]] && cmp -s "$src" "$dst"; then same=$((same + 1)); continue; fi
+    # cksum, not cmp: cmp comes from diffutils, which is not part of Arch's
+    # base metapackage nor Omarchy's package list, whereas cksum is coreutils
+    # and always present.
+    if [[ -f "$dst" && ! -L "$dst" ]] \
+       && [[ "$(cksum < "$src")" == "$(cksum < "$dst")" ]]; then
+        same=$((same + 1)); continue
+    fi
     (( dry )) || install -m 0644 "$src" "$dst"
     added=$((added + 1))
 done

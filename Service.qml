@@ -274,7 +274,11 @@ Item {
       "import json,os,sys,tempfile\n" +
       "p=sys.argv[1]; i=sys.argv[2]\n" +
       "try:\n" +
-      "    d=json.load(open(p))\n" +
+      "    fd=os.open(p, os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)\n" +
+      "    try:\n" +
+      "        d=json.loads(os.read(fd,1048576).decode('utf-8','replace'))\n" +
+      "    finally:\n" +
+      "        os.close(fd)\n" +
       "except Exception:\n" +
       "    sys.exit(0)\n" +
       "e=d.get('endpoints') or {}\n" +
@@ -760,9 +764,11 @@ Item {
     root.lastError = ""
     root.updating = true
     root.updateStatus = "Importing into NetworkManager\u2026"
+    // No --user: $USER is just environment and must not decide which account
+    // a root script reads files as. fvpn-import-profiles derives it from
+    // PKEXEC_UID, which pkexec sets itself.
     importProcess.command = ["pkexec", "bash", root.importBin,
                              "--dir", root.profileDir,
-                             "--user", Quickshell.env("USER") || "",
                              "--account", root.account]
     importProcess.running = true
   }
@@ -814,8 +820,20 @@ Item {
   }
 
   function browseForProfiles() {
-    if (browseProcess.running || profileDir === "") return
+    if (browseProcess.running || profileDir === "" || !hasPicker) return
     browseProcess.running = true
+  }
+
+  // zenity is NOT in Omarchy's package list — it happened to be present here
+  // only as a dependency of something else. Without this check the browse
+  // button would silently do nothing on a default install, so the button is
+  // hidden instead and the profile directory can still be filled by hand.
+  property bool hasPicker: false
+  Process {
+    id: pickerCheck
+    running: true
+    command: ["sh", "-c", "command -v zenity >/dev/null 2>&1"]
+    onExited: function (code) { root.hasPicker = (code === 0) }
   }
 
   // ── Live updates ──────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # fvpn-import-profiles — import a directory of .ovpn files into NetworkManager
 #
-#   pkexec bash fvpn-import-profiles --dir DIR --user NAME --account EMAIL
+#   pkexec bash fvpn-import-profiles --dir DIR --account EMAIL
 #   ... --dry-run                    list what would be imported
 #
 # Importing a connection needs root (polkit's settings.modify.system is
@@ -13,6 +13,10 @@
 #
 # Connections are created at password-flags=2, so no secret is ever written to
 # disk here; the password stays in the user's keyring.
+#
+# The invoking user is taken from PKEXEC_UID (set by pkexec itself) or
+# SUDO_USER, never from $USER, which is only environment and must not decide
+# whose files a root script reads. --user exists as a manual override.
 #
 # UNTRUSTED SOURCE. --dir is user-writable, so root must not follow paths
 # inside it. Every read of a profile is performed *as the target user* via
@@ -44,7 +48,7 @@ done
 
 [[ $EUID -eq 0 ]] || die "must run as root"
 [[ -n "$dir" ]] || die "--dir is required"
-[[ -n "$target_user" ]] || die "--user is required"
+[[ -n "$target_user" ]] || die "cannot determine the invoking user; run via pkexec or sudo, or pass --user"
 [[ -n "$account" ]] || die "--account is required"
 id -u "$target_user" >/dev/null 2>&1 || die "no such user: $target_user"
 # The account lands in a keyfile and in argv of nothing; still, keep it sane.

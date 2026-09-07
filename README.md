@@ -49,6 +49,24 @@ next rather than reciting all of them:
 | Download FastestVPN's location profiles in settings | **Refresh profiles**, or add your own `.ovpn` files |
 | The profiles are ready. Import them in settings | **Import profiles** |
 
+## Requirements
+
+Everything the plugin runs is present on a default Omarchy except one package,
+which the first step installs:
+
+- **`networkmanager-openvpn`** — `omarchy pkg add networkmanager-openvpn`.
+  NetworkManager cannot speak OpenVPN without it.
+
+Everything else comes from Arch's `base` metapackage (`coreutils`, `findutils`,
+`util-linux`, `systemd`, `grep`, `sed`, `bash`), from Omarchy's own package list
+(`networkmanager`, `libsecret`, `unzip`), or from something Omarchy already
+depends on (`curl` via `git`, `python` via `uwsm`/`ufw`, `polkit` via
+`quickshell` itself).
+
+`zenity` is optional. It provides the **Add profiles…** file picker, and the
+button is hidden when it is absent — profiles can always be copied into the
+directory by hand instead.
+
 ## Credentials
 
 The password lives in the desktop keyring (Secret Service), never in
