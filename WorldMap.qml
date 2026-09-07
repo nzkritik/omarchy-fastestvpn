@@ -31,6 +31,10 @@ Item {
     return v
   }
 
+  readonly property bool connectedValid: !!connectedPoint
+    && isFinite(Number(connectedPoint.latitude))
+    && isFinite(Number(connectedPoint.longitude))
+
   readonly property real projectionScale: Math.min(width / 1000, height / 500)
 
   function pointX(point) {
@@ -157,6 +161,8 @@ Item {
       color: "transparent"
       border.width: 2.5 / root.zoomFactor
       border.color: root.foreground
+      Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+      Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
     }
 
     // Entry -> exit link for a double-hop profile, drawn under the pins.
@@ -192,16 +198,40 @@ Item {
       border.color: Util.alpha(root.accent, 0.9)
     }
 
+    // Halo behind the exit pin. Sized in projection units like everything
+    // else, and divided by zoomFactor so it holds a constant on-screen size
+    // however far the camera has pushed in.
     Rectangle {
-      visible: root.connectedPoint && isFinite(Number(root.connectedPoint.latitude))
-        && isFinite(Number(root.connectedPoint.longitude))
+      id: connectedHalo
+      visible: root.connectedValid
       x: root.pointX(root.connectedPoint) - width / 2
       y: root.pointY(root.connectedPoint) - height / 2
-      width: 11 / root.zoomFactor
+      width: 34 / root.zoomFactor
+      height: width
+      radius: width / 2
+      color: Util.alpha(root.accent, 0.16)
+      border.width: 1.5 / root.zoomFactor
+      border.color: Util.alpha(root.accent, 0.5)
+
+      // A slow breath, not a blink: it should draw the eye once and then stay
+      // out of the way.
+      SequentialAnimation on scale {
+        running: connectedHalo.visible
+        loops: Animation.Infinite
+        NumberAnimation { from: 0.82; to: 1.12; duration: 1900; easing.type: Easing.InOutSine }
+        NumberAnimation { from: 1.12; to: 0.82; duration: 1900; easing.type: Easing.InOutSine }
+      }
+    }
+
+    Rectangle {
+      visible: root.connectedValid
+      x: root.pointX(root.connectedPoint) - width / 2
+      y: root.pointY(root.connectedPoint) - height / 2
+      width: 16 / root.zoomFactor
       height: width
       radius: width / 2
       color: root.accent
-      border.width: 1.5 / root.zoomFactor
+      border.width: 2 / root.zoomFactor
       border.color: root.foreground
     }
   }

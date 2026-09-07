@@ -83,6 +83,8 @@ Panel {
   }
 
   readonly property var activeLoc: service ? service.activeLocation : null
+  readonly property var selectedLoc: (service && selectedId)
+                                     ? service.locationById(selectedId) : null
 
   // Selecting is free and reversible; it only moves the highlight.
   function selectRow(loc) {
@@ -309,6 +311,10 @@ Panel {
           locations: root.mappable
           connectedPoint: root.service && root.service.connected && root.activeLoc
                           && isFinite(root.activeLoc.latitude) ? root.activeLoc : null
+          // Browsing the list now moves a ring around the map, which is half
+          // the point of selecting before connecting.
+          selectedPoint: root.selectedLoc && isFinite(root.selectedLoc.latitude)
+                         ? root.selectedLoc : null
           foreground: root.foreground
           accent: root.accent
         }
