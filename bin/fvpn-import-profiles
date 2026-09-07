@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# fvpn-import-profiles — import a directory of .ovpn files into NetworkManager
+#
+#   pkexec bash fvpn-import-profiles --dir DIR --user NAME --account EMAIL
+#   ... --dry-run                    list what would be imported
+#
+# Importing a connection needs root (polkit's settings.modify.system is
+# auth_admin_keep), so this is the privileged half. It downloads nothing and
+# judges nothing: it reads the directory the user configured and mirrors it
+# into NetworkManager. Everything else — fetching profiles, testing them —
+# happens unprivileged elsewhere.
+#
+# Connections are created at password-flags=2, so no secret is ever written to
+# disk here; the password stays in the user's keyring.
+#
+# UNTRUSTED SOURCE. --dir is user-writable, so root must not follow paths
+# inside it. Every read of a profile is performed *as the target user* via
+# runuser, which makes a planted symlink worthless: it resolves with the
+# user's own privileges, not root's.
+# ---------------------------------------------------------------------------
+set -uo pipefail
+
+SYSCONN_DIR=/etc/NetworkManager/system-connections
+CERT_DIR=/etc/NetworkManager/certificates/fvpn
+STAGE_DIR=/etc/openvpn
+MAX_BYTES=262144   # a profile is ~4KB; this bounds a swollen or endless file
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+dir=""; target_user="${PKEXEC_UID:+$(id -un "$PKEXEC_UID" 2>/dev/null)}"
+target_user="${target_user:-${SUDO_USER:-}}"
+account=""; dry=0; prune=0
+while (( $# )); do
+    case "$1" in
+        --dir)     dir="${2:-}"; shift 2 ;;
+        --user)    target_user="${2:-}"; shift 2 ;;
+        --account) account="${2:-}"; shift 2 ;;
+        --dry-run) dry=1; shift ;;
+        --prune)   prune=1; shift ;;
+        *) echo "usage: $0 --dir DIR --user NAME --account EMAIL [--dry-run] [--prune]" >&2; exit 2 ;;
+    esac
+done
+
+[[ $EUID -eq 0 ]] || die "must run as root"
+[[ -n "$dir" ]] || die "--dir is required"
+[[ -n "$target_user" ]] || die "--user is required"
+[[ -n "$account" ]] || die "--account is required"
+id -u "$target_user" >/dev/null 2>&1 || die "no such user: $target_user"
+# The account lands in a keyfile and in argv of nothing; still, keep it sane.
+[[ "$account" =~ ^[A-Za-z0-9._%+-]+@?[A-Za-z0-9.-]*$ ]] || die "implausible account: $account"
+command -v nmcli   >/dev/null || die "nmcli not found"
+command -v runuser >/dev/null || die "runuser not found"
+command -v python3 >/dev/null || die "python3 required"
+[[ -e /usr/lib/NetworkManager/nm-openvpn-service ]] \
+  || [[ -e /usr/lib/NetworkManager/VPN/nm-openvpn-service.name ]] \
+  || die "networkmanager-openvpn is not installed"
+
+# Listing is done as the user too, so a symlinked profile directory cannot walk
+# root into somewhere it should not read.
+[[ -d "$dir" && ! -L "$dir" ]] || die "not a directory (or is a symlink): $dir"
+
+mapfile -t names < <(
+  runuser -u "$target_user" -- \
+    find "$dir" -maxdepth 1 -type f -name '*.ovpn' -printf '%f\n' 2>/dev/null | sort
+)
+(( ${#names[@]} )) || die "no .ovpn files in $dir"
+
+# ── Work out the connection name each file wants ────────────────────────────
+# Bundle files are <id>-udp.ovpn / <id>-tcp.ovpn. A file the user dropped in by
+# hand may be named anything, so fall back to reading its `proto` line. UDP is
+# the plain name and TCP gets the -tcp suffix, matching what the UI expects.
+declare -A want_conn=() want_proto=()
+for base in "${names[@]}"; do
+    [[ "$base" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.ovpn$ ]] || {
+        echo "  skip (bad name): $base" >&2; continue
+    }
+    stem="${base%.ovpn}"
+    case "$stem" in
+        *-udp) id="${stem%-udp}"; proto=udp ;;
+        *-tcp) id="${stem%-tcp}"; proto=tcp ;;
+        *)     id="$stem"
+               proto="$(runuser -u "$target_user" -- \
+                          dd if="$dir/$base" iflag=nofollow,nonblock bs="$MAX_BYTES" count=1 2>/dev/null \
+                        | sed -n 's/^[[:space:]]*proto[[:space:]]\+\([a-z]*\).*/\1/p' | head -1)"
+               proto="${proto:-udp}" ;;
+    esac
+    [[ "$proto" == tcp* ]] && proto=tcp || proto=udp
+    [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "  skip (bad id): $base" >&2; continue; }
+    conn="fvpn-$id"; [[ "$proto" == tcp ]] && conn="fvpn-$id-tcp"
+    want_conn["$base"]="$conn"
+    want_proto["$base"]="$proto"
+done
+(( ${#want_conn[@]} )) || die "no usable profiles in $dir"
+
+existing() { nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$1"; }
+
+todo=(); skipped=0
+for base in "${!want_conn[@]}"; do
+    if existing "${want_conn[$base]}"; then (( skipped++ )); continue; fi
+    todo+=("$base")
+done
+IFS=$'\n' todo=($(sort <<<"${todo[*]:-}")); unset IFS
+
+printf 'profiles found     : %d\n' "${#want_conn[@]}"
+printf 'already imported   : %d\n' "$skipped"
+printf 'to import          : %d\n' "${#todo[@]}"
+
+if (( dry )); then echo; echo "(dry run — nothing changed)"; exit 0; fi
+(( ${#todo[@]} )) || { echo "nothing to do"; exit 0; }
+
+install -d -m 0755 -o root -g root "$CERT_DIR"
+install -d -m 0755 -o root -g root "$STAGE_DIR"
+
+imported=0; failed=0
+for base in "${todo[@]}"; do
+    conn="${want_conn[$base]}"
+    staged="$STAGE_DIR/$base"
+
+    # Copy the content as the user, then write it out as root. dd's nofollow
+    # refuses a symlink and the byte bound caps a swollen file.
+    if ! runuser -u "$target_user" -- \
+           dd if="$dir/$base" iflag=nofollow,nonblock bs="$MAX_BYTES" count=1 2>/dev/null \
+         > "$staged.part"; then
+        echo "  FAIL $base (unreadable)"; rm -f "$staged.part"; (( failed++ )); continue
+    fi
+    if ! grep -q '^[[:space:]]*remote[[:space:]]' "$staged.part"; then
+        echo "  FAIL $base (no remote line — not an OpenVPN profile)"
+        rm -f "$staged.part"; (( failed++ )); continue
+    fi
+    chmod 0644 "$staged.part"; chown root:root "$staged.part"
+    mv -f "$staged.part" "$staged"
+
+    # nmcli names the connection after the file stem; rename it afterwards.
+    stem="${base%.ovpn}"
+    while existing "$stem"; do nmcli connection delete id "$stem" >/dev/null 2>&1 || break; done
+    if ! nmcli connection import type openvpn file "$staged" >/dev/null 2>&1; then
+        echo "  FAIL $base (import)"; (( failed++ )); continue
+    fi
+    [[ "$stem" != "$conn" ]] && nmcli connection modify id "$stem" connection.id "$conn" >/dev/null 2>&1
+    nmcli connection modify id "$conn" connection.autoconnect no                    >/dev/null 2>&1
+    nmcli connection modify id "$conn" connection.permissions "user:${target_user}"  >/dev/null 2>&1
+    echo "  ok   $conn"
+    (( imported++ ))
+done
+
+# ── Fix up certs, username and secret flags ─────────────────────────────────
+# The importer extracts inline <ca>/<tls-auth> blobs into root's home and
+# defaults password-flags to 1 (agent-owned). Neither works here: NM checks
+# cert readability as the *activating user*, and no NM secret agent runs on an
+# Omarchy desktop, so an agent-owned password can never be supplied.
+echo
+echo "fixing certs, account and secret flags…"
+CERT_DIR="$CERT_DIR" SYSCONN_DIR="$SYSCONN_DIR" VPN_USERNAME="$account" python3 <<'PY'
+import configparser, glob, os, shutil
+cdir = os.path.normpath(os.environ["CERT_DIR"])
+user = os.environ["VPN_USERNAME"]
+fixed = 0
+for kf in sorted(glob.glob(os.path.join(os.environ["SYSCONN_DIR"], "*.nmconnection"))):
+    cp = configparser.RawConfigParser(); cp.optionxform = str
+    try:
+        with open(kf, encoding="utf-8") as fh: cp.read_file(fh)
+    except Exception:
+        continue
+    if not cp.has_section("connection"): continue
+    if not cp.get("connection", "id", fallback="").startswith("fvpn-"): continue
+    if not cp.has_section("vpn"): continue
+    changed = False
+    for key in ("ca", "ta"):
+        src = cp.get("vpn", key, fallback="")
+        if not src: continue
+        if src.startswith("/root/"):
+            dst = os.path.join(cdir, os.path.basename(src))
+            if os.path.isfile(src): shutil.move(src, dst)
+            if os.path.isfile(dst):
+                os.chmod(dst, 0o644); os.chown(dst, 0, 0)
+                cp.set("vpn", key, dst); changed = True
+        elif os.path.dirname(os.path.normpath(src)) == cdir and os.path.isfile(src):
+            os.chmod(src, 0o644); os.chown(src, 0, 0)
+    if cp.get("vpn", "username", fallback="") != user:
+        cp.set("vpn", "username", user); changed = True
+    if cp.get("vpn", "password-flags", fallback="") != "2":
+        cp.set("vpn", "password-flags", "2"); changed = True
+    if cp.has_section("vpn-secrets"):
+        cp.remove_section("vpn-secrets"); changed = True
+    if not changed: continue
+    tmp = kf + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        cp.write(fh, space_around_delimiters=False)
+    os.chmod(tmp, 0o600); os.chown(tmp, 0, 0)
+    os.replace(tmp, kf)
+    fixed += 1
+print(f"  adjusted {fixed} keyfile(s)")
+PY
+
+nmcli connection reload
+echo
+printf 'imported: %d   failed: %d\n' "$imported" "$failed"
+echo "total fvpn-* connections: $(nmcli -t -f NAME connection show | grep -c '^fvpn-')"

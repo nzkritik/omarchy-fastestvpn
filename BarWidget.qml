@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.Commons
 import qs.Ui
 
@@ -63,10 +64,23 @@ BarWidget {
     })
   }
 
-  function pushPollInterval() {
+  // The service is constructed before shell.json has been read, so settings are
+  // pushed in rather than pulled: this runs again on every settings change.
+  function pushSettings() {
     if (!svc) return
     var seconds = Number(root.setting("refreshIntervalSec", 30)) || 30
     svc.pollInterval = Math.max(5000, Math.min(3600000, seconds * 1000))
+
+    // An unset profile directory resolves here rather than in the manifest,
+    // which cannot expand ~ or read the environment.
+    var dir = String(root.setting("profileDir", "")).trim()
+    if (dir === "") {
+      var base = Quickshell.env("XDG_DATA_HOME")
+      if (!base || base === "") base = Quickshell.env("HOME") + "/.local/share"
+      dir = base + "/fastestvpn/profiles"
+    }
+    svc.profileDir = dir
+    svc.account = String(root.setting("username", "")).trim()
   }
 
   function open() { if (panelLoader.item) panelLoader.item.open() }
@@ -78,8 +92,8 @@ BarWidget {
 
   Component.onCompleted: loadPanel()
   onBarChanged: injectPanel()
-  onSettingsChanged: { injectPanel(); pushPollInterval() }
-  onSvcChanged: { loadPanel(); injectPanel(); pushPollInterval() }
+  onSettingsChanged: { injectPanel(); pushSettings() }
+  onSvcChanged: { loadPanel(); injectPanel(); pushSettings() }
 
   Loader {
     id: panelLoader

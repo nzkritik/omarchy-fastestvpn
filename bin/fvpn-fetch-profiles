@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# fvpn-fetch-profiles — fill the profile directory from FastestVPN's bundle
+#
+#   fvpn-fetch-profiles [--dir DIR] [--dry-run]
+#
+# Runs unprivileged, as the user, into a user-owned directory. The bundle is
+# the vendor's published OpenVPN archive; it is served directly, with no HTML
+# page in front of it.
+#
+# This replaces the old download-inside-the-root-importer arrangement: the
+# importer now only ever reads the directory, so fetching needs no privilege
+# and the user can equally well drop their own .ovpn files in by hand.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+BUNDLE_URL="https://support.fastestvpn.com/download/fastestvpn_ovpn/"
+DEFAULT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastestvpn/profiles"
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+dir="$DEFAULT_DIR"
+dry=0
+while (( $# )); do
+    case "$1" in
+        --dir) dir="${2:-}"; shift 2 || die "--dir needs a path" ;;
+        --dry-run) dry=1; shift ;;
+        *) echo "usage: $0 [--dir DIR] [--dry-run]" >&2; exit 2 ;;
+    esac
+done
+[[ -n "$dir" ]] || die "empty profile directory"
+
+command -v curl  >/dev/null || die "curl required"
+command -v unzip >/dev/null || die "unzip required"
+
+# Refuse a symlinked destination: this path comes from user settings and is
+# written to, so a link planted here would redirect the whole extraction.
+[[ ! -L "$dir" ]] || die "profile directory is a symlink: $dir"
+mkdir -p "$dir"
+[[ -d "$dir" && ! -L "$dir" ]] || die "not a directory: $dir"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+echo "downloading bundle…"
+curl -sL --max-time 90 -A 'Mozilla/5.0' "$BUNDLE_URL" -o "$tmp/bundle.zip" \
+  || die "download failed"
+head -c2 "$tmp/bundle.zip" | grep -q PK || die "upstream did not return a zip"
+
+# -j flattens, so a crafted archive path cannot place a file outside $tmp/x.
+unzip -qq -j -o "$tmp/bundle.zip" -d "$tmp/x" '*.ovpn' || die "unzip failed"
+
+added=0; same=0
+shopt -s nullglob
+for src in "$tmp"/x/*.ovpn; do
+    base="${src##*/}"
+    # The filename becomes a connection id later, so validate it here rather
+    # than trusting whatever the archive happened to contain.
+    [[ "$base" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.ovpn$ ]] || {
+        echo "  skip (bad name): $base"; continue
+    }
+    dst="$dir/$base"
+    if [[ -e "$dst" ]] && cmp -s "$src" "$dst"; then (( same++ )); continue; fi
+    (( dry )) || install -m 0644 "$src" "$dst"
+    (( added++ ))
+done
+
+if (( dry )); then
+    echo "would add or update $added profile(s); $same already current"
+    echo "(dry run — nothing changed)"
+    exit 0
+fi
+echo "added or updated $added profile(s); $same already current"
+echo "profile directory: $dir ($(ls -1 "$dir"/*.ovpn 2>/dev/null | wc -l) profiles)"

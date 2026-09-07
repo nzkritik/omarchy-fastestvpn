@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "nzkritik.fastestvpn",
   "name": "FastestVPN",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "nzkritik",
   "license": "MIT",
   "description": "Connect, switch and monitor FastestVPN locations from the Omarchy bar, with a world map of exit points.",
@@ -19,14 +19,30 @@
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
-      "hideDeadEndpoints": true,
+      "profileDir": "",
+      "username": "",
+      "hideUnavailable": true,
       "refreshIntervalSec": 30
     },
     "schema": [
       {
-        "key": "hideDeadEndpoints",
+        "key": "profileDir",
+        "type": "path",
+        "label": "OpenVPN profile directory",
+        "description": "Folder holding the .ovpn files to import. Left empty, it defaults to ~/.local/share/fastestvpn/profiles.",
+        "defaultValue": ""
+      },
+      {
+        "key": "username",
+        "type": "string",
+        "label": "FastestVPN account",
+        "description": "The account name your VPN password belongs to. The password itself lives in the desktop keyring, never in this file.",
+        "defaultValue": ""
+      },
+      {
+        "key": "hideUnavailable",
         "type": "boolean",
-        "label": "Hide locations whose server is unreachable",
+        "label": "Hide locations that failed to connect",
         "defaultValue": true
       },
       {

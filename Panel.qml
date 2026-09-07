@@ -22,6 +22,19 @@ Panel {
 
   property string query: ""
   property bool showUnavailable: false
+  property bool configOpen: false
+
+  // Persist one key back into this widget's shell.json entry. The host owns
+  // the file; updateEntryInline merges into the existing entry and rewrites it,
+  // which then flows back down as a settings change.
+  function writeSetting(key, value) {
+    var host = root.bar && root.bar.shell ? root.bar.shell : null
+    if (!host || typeof host.updateEntryInline !== "function") return
+    var next = ({})
+    for (var k in root.settings) next[k] = root.settings[k]
+    next[key] = value
+    host.updateEntryInline(root.moduleName, next)
+  }
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
@@ -29,7 +42,7 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
-  readonly property bool hideDead: setting("hideDeadEndpoints", true) !== false
+  readonly property bool hideUnavailable: setting("hideUnavailable", true) !== false
 
   readonly property var rows: {
     var all = service ? service.locations : []
@@ -38,9 +51,14 @@ Panel {
     for (var i = 0; i < all.length; i++) {
       var l = all[i]
       if (l.retired) continue
-      // An endpoint that is not fully known is hidden unless explicitly asked
-      // for; when shown it renders disabled rather than becoming selectable.
-      if (!service.isSelectable(l) && !showUnavailable) continue
+      // Two different reasons a row can be missing, and they deserve different
+      // treatment. Not imported: nothing to click, so hide it unless asked.
+      // Proven unavailable: hide it only if the user wants it hidden, since
+      // seeing what failed is often the point.
+      var imported = service.hasTransport(l.id, service.transport)
+      var bad = service.isUnavailable(l.id)
+      if (!imported && !showUnavailable) continue
+      if (bad && hideUnavailable && !showUnavailable) continue
       if (q !== "") {
         var hay = (l.label + " " + l.country + " " + l.city + " " + l.countryCode).toLowerCase()
         if (hay.indexOf(q) < 0) continue
@@ -55,7 +73,10 @@ Panel {
   function connectRow(loc) {
     if (!service || !loc) return
     if (service.activeId === loc.id) { service.disconnect(); return }
-    if (!service.isSelectable(loc)) return   // incomplete/absent endpoints are inert
+    if (!service.hasTransport(loc.id, service.transport)) return  // nothing to dial
+    // Asking for a location that was marked unavailable is the retry path:
+    // drop the old verdict so this attempt is judged on its own.
+    if (service.isUnavailable(loc.id)) service.clearVerdict(loc.id)
     service.connectTo(loc.id)
   }
 
@@ -83,7 +104,7 @@ Panel {
         city: l ? l.city : "",
         catalogue: root.service.locations.length,
         selectable: root.service.liveCount,
-        pending: root.service.pendingCount,
+        unavailable: root.service.unavailableCount,
         notImported: root.service.notInstalledCount,
         shown: root.rows.length,
         lastError: root.service.lastError
@@ -138,16 +159,55 @@ Panel {
         }
 
         Text {
-          visible: text !== ""
+          visible: text !== "" && !root.configOpen
           text: root.service ? (root.service.liveCount + " locations") : ""
           color: root.dim
           font.family: root.fontFamily
           font.pixelSize: Style.space(10)
         }
+
+        // Gear. Drawn rather than pulled from an icon font, so it cannot come
+        // out as a missing glyph on a system without one installed.
+        Item {
+          visible: !root.configOpen
+          Layout.alignment: Qt.AlignVCenter
+          implicitWidth: Style.space(18)
+          implicitHeight: Style.space(18)
+          opacity: gearHover.hovered ? 1.0 : 0.65
+
+          HoverHandler { id: gearHover }
+          TapHandler { onTapped: root.configOpen = true }
+
+          Rectangle {
+            anchors.centerIn: parent
+            width: Style.space(12); height: width; radius: width / 2
+            color: "transparent"
+            border.width: Math.max(1, Style.space(2))
+            border.color: root.foreground
+          }
+          Repeater {
+            model: 4
+            Rectangle {
+              required property int index
+              anchors.centerIn: parent
+              width: Style.space(16)
+              height: Math.max(1, Style.space(2))
+              radius: height / 2
+              color: root.foreground
+              rotation: index * 45
+            }
+          }
+          Rectangle {
+            anchors.centerIn: parent
+            width: Style.space(8); height: width; radius: width / 2
+            color: root.bar ? root.bar.background : Color.background
+          }
+        }
       }
 
       // ── Status ────────────────────────────────────────────────────────────
       RowLayout {
+        visible: !root.configOpen
         Layout.fillWidth: true
         spacing: Style.space(10)
 
@@ -201,19 +261,11 @@ Panel {
           onClicked: if (root.service) root.service.disconnect()
         }
 
-        Button {
-          enabled: root.service && !root.service.updating
-          text: root.service && root.service.updating ? "Updating\u2026" : "Update"
-          ToolTip.visible: hovered
-          ToolTip.text: "Fetch the latest endpoint list from FastestVPN and fill in\n"
-                      + "missing locations. Geolocates each server directly, so it\n"
-                      + "never routes your traffic through them."
-          onClicked: if (root.service) root.service.updateEndpoints()
-        }
       }
 
       // ── Map ───────────────────────────────────────────────────────────────
       Rectangle {
+        visible: !root.configOpen
         Layout.fillWidth: true
         Layout.preferredHeight: Style.space(190)
         radius: Style.space(6)
@@ -233,6 +285,7 @@ Panel {
       // ── Search ────────────────────────────────────────────────────────────
       TextField {
         id: search
+        visible: !root.configOpen
         Layout.fillWidth: true
         placeholderText: "Search locations…"
         onTextChanged: root.query = text
@@ -241,6 +294,7 @@ Panel {
 
       // ── Filter ────────────────────────────────────────────────────────────
       Row {
+        visible: !root.configOpen
         Layout.fillWidth: true
         spacing: Style.space(6)
 
@@ -254,7 +308,7 @@ Panel {
               var n = 0
               for (var i = 0; i < root.service.locations.length; i++) {
                 var l = root.service.locations[i]
-                if (l.complete && root.service.hasTransport(l.id, modelData)) n++
+                if (!l.retired && root.service.hasTransport(l.id, modelData)) n++
               }
               return n
             }
@@ -308,6 +362,7 @@ Panel {
       // ── Locations ─────────────────────────────────────────────────────────
       ListView {
         id: list
+        visible: !root.configOpen
         Layout.fillWidth: true
         Layout.fillHeight: true
         clip: true
@@ -323,7 +378,12 @@ Panel {
           height: Style.space(40)
           radius: Style.space(4)
           readonly property bool isActive: root.service && root.service.activeId === modelData.id
-          readonly property bool usable: (root.service && root.service.isSelectable(modelData)) || isActive
+          readonly property bool unavailable: root.service ? root.service.isUnavailable(modelData.id) : false
+          readonly property bool imported: root.service ? root.service.hasTransport(modelData.id, root.service.transport) : false
+          // An unavailable row stays clickable: retrying is a deliberate user
+          // action, and it is the only way back from a verdict that was really
+          // a throttled account or a dropped uplink.
+          readonly property bool usable: imported || isActive
           opacity: usable ? 1.0 : 0.45
           color: (hover.hovered && usable) ? Util.alpha(root.foreground, 0.08)
                : (isActive ? Util.alpha(root.accent, 0.16) : "transparent")
@@ -341,7 +401,7 @@ Panel {
               Layout.alignment: Qt.AlignVCenter
               width: Style.space(7); height: width; radius: width / 2
               color: row.isActive ? root.accent : root.dim
-              opacity: row.modelData.dead ? 0.35 : 1
+              opacity: row.unavailable ? 0.35 : 1
             }
 
             ColumnLayout {
@@ -350,7 +410,7 @@ Panel {
               Text {
                 Layout.fillWidth: true
                 text: row.modelData.label
-                color: row.modelData.dead ? root.dim : root.foreground
+                color: row.unavailable ? root.dim : root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.space(13)
                 elide: Text.ElideRight
@@ -374,17 +434,16 @@ Panel {
             }
 
             Text {
-              visible: !(root.service && root.service.isSelectable(row.modelData))
+              visible: text !== ""
               text: {
-                var st = row.modelData.status
-                if (row.modelData.complete && root.service
-                    && !root.service.isInstalled(row.modelData.id)) return "not imported"
-                return st === "auth-rejected" ? "auth refused"
-                     : st === "unreachable" ? "unreachable"
-                     : st === "no-geo" ? "no location"
-                     : st === "pending" ? "checking\u2026"
-                     : st === "no-host" ? "no server"
-                     : "unavailable"
+                if (!root.service) return ""
+                if (!row.imported) return "not imported"
+                var v = root.service.verdictFor(row.modelData.id)
+                if (!v) return ""
+                if (v.result === "unreachable")
+                  return v.failures > 1 ? ("unavailable \u00d7" + v.failures) : "unavailable"
+                if (v.result === "auth") return "auth refused"
+                return ""
               }
               color: root.urgent
               font.family: root.fontFamily
@@ -396,10 +455,14 @@ Panel {
 
       Text {
         Layout.fillWidth: true
-        visible: root.service && (root.service.updating || root.service.pendingCount > 0)
-        text: root.service ? (root.service.updating ? root.service.updateStatus
-              : root.service.pendingCount + " endpoint(s) still being identified")
-              : ""
+        visible: !root.configOpen && text !== ""
+        text: {
+          if (!root.service) return ""
+          if (root.service.updating) return root.service.updateStatus
+          if (root.service.installedCount === 0)
+            return "No profiles imported yet \u2014 open settings to get started"
+          return ""
+        }
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.space(10)
@@ -408,12 +471,27 @@ Panel {
 
       Text {
         Layout.fillWidth: true
-        visible: root.service && root.service.loadError !== ""
+        visible: !root.configOpen && root.service && root.service.loadError !== ""
         text: root.service ? root.service.loadError : ""
         color: root.urgent
         font.family: root.fontFamily
         font.pixelSize: Style.space(10)
         wrapMode: Text.WordWrap
+      }
+
+      // ── Settings ──────────────────────────────────────────────────────────
+      ConfigView {
+        visible: root.configOpen
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        service: root.service
+        foreground: root.foreground
+        urgent: root.urgent
+        accent: root.accent
+        dim: root.dim
+        fontFamily: root.fontFamily
+        onSettingChanged: function (key, value) { root.writeSetting(key, value) }
+        onCloseRequested: root.configOpen = false
       }
     }
   }

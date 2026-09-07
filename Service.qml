@@ -15,6 +15,15 @@ Item {
   property var shell: null
   property int pollInterval: 30000
 
+  // ── Configuration ─────────────────────────────────────────────────────────
+  // Pushed in from the bar widget's shell.json entry. The profile directory is
+  // where .ovpn files live and is the source of truth for which endpoints
+  // exist at all; the account is the VPN username the keyring credential
+  // belongs to.
+  property string profileDir: ""
+  property string account: ""
+  readonly property bool configured: profileDir !== "" && account !== ""
+
   // ── Location catalogue ────────────────────────────────────────────────────
   property var locations: []
   property bool locationsLoaded: false
@@ -32,34 +41,65 @@ Item {
   readonly property bool transitional: busy || (activeId !== "" && !connected)
   readonly property var activeLocation: locationById(activeId)
 
-  // A location is selectable only when fully identified AND importable here.
+  // ── Endpoint verdicts ─────────────────────────────────────────────────────
+  // Written by bin/fvpn-connect, one entry per real connect attempt. This is
+  // the ONLY thing that marks an endpoint unavailable. Nothing probes in the
+  // background: every probe costs an authentication against an account that
+  // rate-limits, and a sweep of them once got this account blocked for a day.
+  //
+  // `auth` verdicts are deliberately not treated as unavailability. FastestVPN
+  // answers AUTH_FAILED both for a wrong password and for too many concurrent
+  // sessions, so believing it would condemn healthy endpoints the moment the
+  // account is throttled.
+  property var endpointState: ({})
+
+  function verdictFor(id) {
+    var v = endpointState ? endpointState[id] : null
+    return (v && typeof v === "object") ? v : null
+  }
+
+  function isUnavailable(id) {
+    var v = verdictFor(id)
+    return !!v && v.result === "unreachable"
+  }
+
+  // Selectable means: present in the profile directory and imported here under
+  // the current transport, not retired upstream, and not already proven broken
+  // by a real connect. The catalogue's own `status` no longer gates anything —
+  // it came from a TCP probe with known false positives, and judging endpoints
+  // without connecting is exactly what this rework removed.
   function isSelectable(loc) {
-    return !!loc && loc.complete === true && hasTransport(loc.id, transport)
+    return !!loc && loc.retired !== true
+        && hasTransport(loc.id, transport) && !isUnavailable(loc.id)
   }
 
   readonly property int liveCount: {
     var n = 0
     for (var i = 0; i < locations.length; i++)
-      if (locations[i].complete && hasTransport(locations[i].id, transport)) n++
+      if (isSelectable(locations[i])) n++
     return n
   }
   readonly property int notInstalledCount: {
     var n = 0
     for (var i = 0; i < locations.length; i++)
-      if (locations[i].complete && !hasTransport(locations[i].id, transport)) n++
+      if (!locations[i].retired && !hasTransport(locations[i].id, transport)) n++
     return n
   }
-  readonly property int pendingCount: {
+  readonly property int unavailableCount: {
     var n = 0
     for (var i = 0; i < locations.length; i++)
-      if (locations[i].status === "pending" || locations[i].status === "no-geo") n++
+      if (isUnavailable(locations[i].id)) n++
     return n
   }
 
-  // ── Endpoint catalogue refresh ────────────────────────────────────────────
+  // ── Profile management ────────────────────────────────────────────────────
   property bool updating: false
   property string updateStatus: ""
-  readonly property string endpointsBin: pluginDir + "bin/fvpn-endpoints"
+  property int profileCount: 0
+  property bool credentialPresent: false
+  readonly property string fetchBin: pluginDir + "bin/fvpn-fetch-profiles"
+  readonly property string importBin: pluginDir + "bin/fvpn-import-profiles"
+  readonly property string credsBin: pluginDir + "bin/fvpn-creds"
 
   // Qt hands us a file:// URL; Process needs a plain path.
   readonly property string pluginDir: {
@@ -125,12 +165,9 @@ Item {
             precision: String(r.precision || "country"),
             kind: String(r.kind || "standard"),
             protocols: (r.protocols && r.protocols.length) ? r.protocols : ["udp"],
+            // Informational only. Availability is decided by real connect
+            // verdicts in `endpointState`, never by this field.
             status: st,
-            // Only a fully-known endpoint may be chosen: resolved host,
-            // reachable port and coordinates. Everything else still shows,
-            // greyed, so the catalogue stays honest about what exists.
-            complete: st === "complete",
-            dead: st === "unreachable" || r.reachable === false,
             retired: r.retired === true,
             variantOf: r.variantOf ? String(r.variantOf) : "",
             countryMismatch: r.countryMismatch || null,
@@ -156,6 +193,83 @@ Item {
     root.loadError = ""
     loadProcess.running = true
   }
+
+  // ── Endpoint verdict state ────────────────────────────────────────────────
+  // Same guarded read as the catalogue: this path is predictable and lives
+  // under $HOME, so anything running as this user could plant a symlink or a
+  // FIFO there. nofollow refuses the link, nonblock refuses to wedge on the
+  // FIFO, and the count bounds a swollen file.
+  readonly property string stateFile: {
+    var base = Quickshell.env("XDG_STATE_HOME")
+    if (!base || base === "") base = Quickshell.env("HOME") + "/.local/state"
+    return base + "/fastestvpn/endpoints.json"
+  }
+
+  Process {
+    id: stateLoadProcess
+    running: false
+    command: ["dd", "if=" + root.stateFile, "iflag=nofollow,nonblock",
+              "bs=65536", "count=8"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var parsed = null
+        try { parsed = JSON.parse(text) } catch (e) { return }
+        var src = (parsed && parsed.endpoints) || {}
+        var out = ({})
+        for (var id in src) {
+          // Ids reach the UI and are compared against catalogue entries; a
+          // crafted key must not slip through just because it parsed as JSON.
+          if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(id)) continue
+          var v = src[id]
+          if (!v || typeof v !== "object") continue
+          var res = String(v.result || "")
+          if (["ok", "unreachable", "auth", "inconclusive"].indexOf(res) < 0) continue
+          out[id] = {
+            result: res,
+            at: String(v.at || ""),
+            detail: String(v.detail || "").substring(0, 200),
+            failures: Number(v.failures) || 0
+          }
+        }
+        root.endpointState = out
+      }
+    }
+    // A missing file is the normal first-run case, not an error: no attempt
+    // has been made yet, so nothing is known and nothing is marked bad.
+    onExited: function (code) { if (code !== 0) root.endpointState = ({}) }
+  }
+
+  function reloadEndpointState() {
+    if (stateLoadProcess.running) return
+    stateLoadProcess.running = true
+  }
+
+  // Forget a recorded failure so the endpoint becomes selectable again. The
+  // user needs this: a verdict can be collateral damage from a throttled
+  // account or a dropped uplink, and without a way back an endpoint would be
+  // condemned forever by one bad evening.
+  function clearVerdict(id) {
+    if (!id) return
+    var next = ({})
+    for (var k in endpointState) if (k !== id) next[k] = endpointState[k]
+    root.endpointState = next
+    clearProcess.command = ["python3", "-c",
+      "import json,os,sys,tempfile\n" +
+      "p=sys.argv[1]; i=sys.argv[2]\n" +
+      "try:\n" +
+      "    d=json.load(open(p))\n" +
+      "except Exception:\n" +
+      "    sys.exit(0)\n" +
+      "e=d.get('endpoints') or {}\n" +
+      "e.pop(i,None); d['endpoints']=e\n" +
+      "fd,t=tempfile.mkstemp(dir=os.path.dirname(p))\n" +
+      "os.write(fd, json.dumps(d, indent=2, sort_keys=True).encode()); os.close(fd)\n" +
+      "os.chmod(t,0o600); os.replace(t,p)\n",
+      root.stateFile, id]
+    clearProcess.running = true
+  }
+
+  Process { id: clearProcess; running: false; command: [] }
 
   // ── Installed connections ─────────────────────────────────────────────────
   // The catalogue can list endpoints that upstream offers but this machine has
@@ -289,6 +403,10 @@ Item {
     onExited: function (code) {
       root.busy = false
       root.actionStatus = code === 0 ? "" : (actionProcess.label + " failed")
+      // A connect attempt is the moment a verdict gets written, so pick it up
+      // straight away — this is what turns a failed click into a location
+      // greying out, with no probing anywhere.
+      root.reloadEndpointState()
       root.refresh()
     }
   }
@@ -297,16 +415,19 @@ Item {
     if (busy) return
     var loc = locationById(id)
     if (!loc) { root.lastError = "unknown location: " + id; return }
-    if (!isSelectable(loc)) {
-      root.lastError = !loc.complete
-        ? loc.label + " is not ready (" + (loc.status || "incomplete") + ")"
-        : loc.label + " has no " + transport.toUpperCase() + " connection on this machine"
+    if (!hasTransport(loc.id, transport)) {
+      root.lastError = loc.label + " has no " + transport.toUpperCase()
+                     + " connection on this machine — import profiles in settings"
       return
     }
     root.lastError = ""
     root.actionStatus = "Connecting to " + loc.label + "…"
     root.busy = true
     actionProcess.label = "Connect"
+    // The configured account overrides whatever the connection was imported
+    // with, so changing it in settings does not mean reimporting everything.
+    actionProcess.environment = root.account !== ""
+      ? ({ "FVPN_ACCOUNT": root.account }) : ({})
     actionProcess.command = [root.connectBin, root.connectionFor(loc.id)]
     actionProcess.running = true
   }
@@ -325,33 +446,186 @@ Item {
     if (connected || activeId !== "") disconnect()
   }
 
-  // Refresh the catalogue from upstream, then fill in anything missing.
-  // Enrichment geolocates each server's own IP; it never connects through
-  // them, so this is safe to run while the user is working.
+  // \u2500\u2500 Profile directory \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // How many .ovpn files the configured directory holds. Counted rather than
+  // listed: the panel only needs to tell the user whether the directory looks
+  // populated, and reading 150 filenames into QML to display one number is
+  // waste.
   Process {
-    id: updateProcess
+    id: countProcess
     running: false
     command: []
-    stdout: StdioCollector { }
+    stdout: StdioCollector {
+      onStreamFinished: { root.profileCount = Number(String(text).trim()) || 0 }
+    }
+    onExited: function (code) { if (code !== 0) root.profileCount = 0 }
+  }
+
+  function refreshProfileCount() {
+    if (countProcess.running || profileDir === "") return
+    // -maxdepth 1 -type f excludes symlinks and subdirectories, matching
+    // exactly what the importer will agree to read.
+    countProcess.command = ["sh", "-c",
+      "find \"$1\" -maxdepth 1 -type f -name '*.ovpn' 2>/dev/null | wc -l",
+      "sh", profileDir]
+    countProcess.running = true
+  }
+
+  // \u2500\u2500 Credential status \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  Process {
+    id: credStatusProcess
+    running: false
+    command: []
+    onExited: function (code) { root.credentialPresent = (code === 0) }
+  }
+
+  function refreshCredential() {
+    if (credStatusProcess.running || account === "") {
+      if (account === "") root.credentialPresent = false
+      return
+    }
+    credStatusProcess.environment = ({ "FVPN_ACCOUNT": root.account })
+    credStatusProcess.command = [root.credsBin, "status"]
+    credStatusProcess.running = true
+  }
+
+  // Store the password in the keyring. It goes in on stdin and is never held
+  // in a QML property, never placed in argv, and never written to disk.
+  Process {
+    id: credStoreProcess
+    running: false
+    command: []
+    stdinEnabled: true
     onExited: function (code) {
-      if (updateProcess.command.length > 1 && updateProcess.command[1] === "sync" && code === 0) {
-        root.updateStatus = "Filling in new endpoints\u2026"
-        updateProcess.command = [root.endpointsBin, "enrich"]
-        updateProcess.running = true
-        return
-      }
       root.updating = false
-      root.updateStatus = code === 0 ? "" : "Endpoint update failed"
-      root.reloadLocations()
+      root.updateStatus = code === 0 ? "Password saved" : "Could not save the password"
+      root.refreshCredential()
     }
   }
 
-  function updateEndpoints() {
-    if (updating) return
+  function storeCredential(password) {
+    if (updating || account === "" || !password) return
     root.updating = true
-    root.updateStatus = "Checking for new endpoints\u2026"
-    updateProcess.command = [root.endpointsBin, "sync"]
-    updateProcess.running = true
+    root.updateStatus = "Saving password\u2026"
+    credStoreProcess.environment = ({ "FVPN_ACCOUNT": root.account })
+    credStoreProcess.command = [root.credsBin, "store", "--stdin"]
+    credStoreProcess.running = true
+    credStoreProcess.write(password + "\n")
+    credStoreProcess.stdinEnabled = false   // EOF, so the script stops reading
+  }
+
+  // \u2500\u2500 Fetching and importing profiles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Two separate steps on purpose. Fetching is unprivileged and just fills a
+  // directory; importing needs root, so it is the only thing that ever raises
+  // a polkit prompt. Neither one connects to anything.
+  Process {
+    id: fetchProcess
+    running: false
+    command: []
+    stderr: StdioCollector {
+      onStreamFinished: {
+        var msg = String(text).trim()
+        if (msg !== "") root.lastError = msg
+      }
+    }
+    onExited: function (code) {
+      root.updating = false
+      root.updateStatus = code === 0 ? "Profiles updated" : "Could not fetch profiles"
+      root.refreshProfileCount()
+    }
+  }
+
+  function fetchProfiles() {
+    if (updating || profileDir === "") return
+    root.lastError = ""
+    root.updating = true
+    root.updateStatus = "Downloading profiles\u2026"
+    fetchProcess.command = [root.fetchBin, "--dir", root.profileDir]
+    fetchProcess.running = true
+  }
+
+  Process {
+    id: importProcess
+    running: false
+    command: []
+    stderr: StdioCollector {
+      onStreamFinished: {
+        var msg = String(text).trim()
+        if (msg !== "") root.lastError = msg
+      }
+    }
+    onExited: function (code) {
+      root.updating = false
+      // rc 126/127 is pkexec's "dismissed or not authorised", which is a user
+      // decision rather than a failure worth shouting about.
+      root.updateStatus = code === 0 ? "Profiles imported"
+                        : (code === 126 || code === 127) ? "Import cancelled"
+                        : "Import failed"
+      root.refreshInstalled()
+    }
+  }
+
+  function importProfiles() {
+    if (updating || !configured) return
+    root.lastError = ""
+    root.updating = true
+    root.updateStatus = "Importing into NetworkManager\u2026"
+    importProcess.command = ["pkexec", "bash", root.importBin,
+                             "--dir", root.profileDir,
+                             "--user", Quickshell.env("USER") || "",
+                             "--account", root.account]
+    importProcess.running = true
+  }
+
+  // Copy user-supplied .ovpn files into the profile directory. The picker
+  // returns newline-separated absolute paths; cp is given them as arguments
+  // rather than interpolated into a shell string.
+  Process {
+    id: addProcess
+    running: false
+    command: []
+    onExited: function (code) {
+      root.updating = false
+      root.updateStatus = code === 0 ? "Profiles added" : "Could not add profiles"
+      root.refreshProfileCount()
+    }
+  }
+
+  function addProfiles(paths) {
+    if (updating || profileDir === "" || !paths || paths.length === 0) return
+    root.updating = true
+    root.updateStatus = "Adding profiles\u2026"
+    var cmd = ["cp", "-n", "--no-dereference", "--preserve=mode"]
+    for (var i = 0; i < paths.length; i++) {
+      // Only accept plain absolute paths ending in .ovpn. The picker is
+      // trusted, but this is the boundary where a path becomes an argument.
+      if (/^\/[^\0]*\.ovpn$/.test(paths[i])) cmd.push(paths[i])
+    }
+    if (cmd.length === 4) { root.updating = false; root.updateStatus = "No .ovpn files chosen"; return }
+    cmd.push(root.profileDir)
+    addProcess.command = cmd
+    addProcess.running = true
+  }
+
+  // zenity rather than a QML FileDialog: the panel is a layer-shell surface,
+  // and a Qt modal parented to it does not reliably take keyboard focus.
+  Process {
+    id: browseProcess
+    running: false
+    command: ["zenity", "--file-selection", "--multiple", "--separator=\n",
+              "--title=Add OpenVPN profiles", "--file-filter=OpenVPN profiles | *.ovpn"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var picked = String(text).trim()
+        if (picked === "") return
+        root.addProfiles(picked.split("\n"))
+      }
+    }
+  }
+
+  function browseForProfiles() {
+    if (browseProcess.running || profileDir === "") return
+    browseProcess.running = true
   }
 
   // ── Live updates ──────────────────────────────────────────────────────────
@@ -389,8 +663,14 @@ Item {
     onTriggered: root.refresh()
   }
 
+  // Configuration arrives after construction (the bar pushes it once shell.json
+  // is read), so re-derive anything that depends on it whenever it changes.
+  onProfileDirChanged: refreshProfileCount()
+  onAccountChanged: refreshCredential()
+
   Component.onCompleted: {
     reloadLocations()
+    reloadEndpointState()
     refreshInstalled()
     refresh()
   }

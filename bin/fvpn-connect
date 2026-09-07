@@ -11,11 +11,26 @@
 #
 # Requires no privilege: NetworkManager's polkit default for
 # org.freedesktop.NetworkManager.network-control is allow_active=yes.
+#
+# VERDICTS. This is the only place an endpoint is ever judged — the plugin
+# does no background probing, because every probe costs an authentication
+# against a consumer account that rate-limits. Each attempt records one of:
+#
+#   ok            tunnel came up and carries a usable address
+#   unreachable   server never answered, or came up without a valid IP
+#   auth          credentials rejected
+#   inconclusive  we cannot tell
+#
+# Only `unreachable` marks an endpoint unavailable in the UI. `auth` must not:
+# FastestVPN answers AUTH_FAILED both for a bad password and for too many open
+# sessions, so treating it as a server fault would condemn healthy endpoints
+# the moment the account is throttled.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-CONF="${FVPN_CONF:-${HOME}/Dev/fastestvpn/fastestvpn.conf}"
 SERVICE=fastestvpn
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/fastestvpn"
+STATE_FILE="$STATE_DIR/endpoints.json"
 # nmcli's wait, then a grace period. NetworkManager's own VPN connect timeout
 # is 60s, so giving up at 20 meant reporting failure while NM was still
 # negotiating — a slow handshake looked identical to a dead server.
@@ -26,6 +41,70 @@ die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 command -v nmcli       >/dev/null || die "nmcli not found"
 command -v secret-tool >/dev/null || die "secret-tool not found (install libsecret)"
+
+# ── Verdict recording ───────────────────────────────────────────────────────
+# python3 rather than shell string-mashing: the detail text comes from journald
+# and would otherwise need escaping to stay valid JSON. Written via a temp file
+# and rename so a crash mid-write cannot truncate the state.
+record() {
+    local id="$1" result="$2" detail="${3:-}"
+    [[ -n "$id" ]] || return 0
+    command -v python3 >/dev/null || return 0
+    mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+    FVPN_ID="$id" FVPN_RESULT="$result" FVPN_DETAIL="$detail" \
+    FVPN_STATE="$STATE_FILE" python3 - <<'PY' 2>/dev/null || true
+import json, os, tempfile, datetime
+path = os.environ["FVPN_STATE"]
+try:
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    if not isinstance(doc, dict):
+        raise ValueError
+except Exception:
+    doc = {}
+doc["schemaVersion"] = 1
+eps = doc.get("endpoints")
+if not isinstance(eps, dict):
+    eps = {}
+entry = eps.get(os.environ["FVPN_ID"])
+if not isinstance(entry, dict):
+    entry = {}
+result = os.environ["FVPN_RESULT"]
+entry["result"] = result
+entry["at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+entry["detail"] = os.environ["FVPN_DETAIL"][:200]
+# Consecutive failures, so the UI can distinguish a one-off from a dead server.
+if result == "unreachable":
+    entry["failures"] = int(entry.get("failures") or 0) + 1
+elif result == "ok":
+    entry["failures"] = 0
+eps[os.environ["FVPN_ID"]] = entry
+doc["endpoints"] = eps
+d = os.path.dirname(path)
+fd, tmp = tempfile.mkstemp(dir=d)
+with os.fdopen(fd, "w", encoding="utf-8") as fh:
+    json.dump(doc, fh, indent=2, sort_keys=True)
+os.chmod(tmp, 0o600)
+os.replace(tmp, path)
+PY
+}
+
+# Why did it fail? The exit code cannot tell us: AUTH_FAILED and a dead server
+# both surface as a non-zero nmcli. The journal can.
+diagnose() {
+    local since="$1" log=""
+    command -v journalctl >/dev/null || { echo "inconclusive|"; return; }
+    log="$(journalctl --user-unit=NetworkManager --since="$since" --no-pager 2>/dev/null \
+           | tail -200)"
+    [[ -n "$log" ]] || log="$(journalctl -u NetworkManager --since="$since" --no-pager 2>/dev/null | tail -200)"
+    if grep -q 'AUTH_FAILED' <<<"$log"; then
+        echo "auth|credentials rejected (bad password, or too many open sessions)"
+    elif grep -qi 'TLS key negotiation failed\|TLS Error\|Connection timed out' <<<"$log"; then
+        echo "unreachable|server did not answer"
+    else
+        echo "inconclusive|"
+    fi
+}
 
 # ── Disconnect any active VPN ───────────────────────────────────────────────
 down_active_vpns() {
@@ -52,6 +131,11 @@ conn="${1:-}"
 [[ "$conn" =~ ^fvpn-[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
   || die "invalid connection name: $conn"
 
+# The catalogue id behind the connection: fvpn-<id> and fvpn-<id>-tcp are the
+# same endpoint, and a verdict belongs to the endpoint, not the transport.
+id="${conn#fvpn-}"
+id="${id%-tcp}"
+
 uuid="$(nmcli -g connection.uuid connection show id "$conn" 2>/dev/null)" \
   || die "no such connection: $conn"
 [[ "$uuid" =~ ^[0-9a-fA-F-]{36}$ ]] || die "unexpected uuid for $conn"
@@ -60,11 +144,11 @@ uuid="$(nmcli -g connection.uuid connection show id "$conn" 2>/dev/null)" \
   || die "$conn is not a VPN connection"
 
 # Account name, in order of preference:
-#   1. FVPN_ACCOUNT      - explicit override
+#   1. FVPN_ACCOUNT      - explicit override (the plugin passes the configured one)
 #   2. the NM connection - `username` in vpn.data, set at import time
-#   3. a config file     - legacy, for use outside the plugin
-# Preferring the connection keeps this self-contained: a plugin must not
-# depend on a file that only ever existed in one person's home directory.
+# Preferring the override lets the config screen change the account without
+# reimporting 150 connections; the connection is the fallback so the script
+# still works standalone.
 account="${FVPN_ACCOUNT:-}"
 if [[ -z "$account" ]]; then
     account="$(nmcli -g vpn.data connection show uuid "$uuid" 2>/dev/null \
@@ -72,15 +156,14 @@ if [[ -z "$account" ]]; then
         | sed -n 's/^[[:space:]]*username[[:space:]]*=[[:space:]]*//p' \
         | head -1 | tr -d '[:space:]')"
 fi
-if [[ -z "$account" && -r "$CONF" ]]; then
-    account="$(sed -n 's/^[[:space:]]*VPN_USERNAME=["'\'']\?\([^"'\'']*\)["'\'']\?[[:space:]]*$/\1/p' "$CONF" | head -1)"
-fi
-[[ -n "$account" ]] || die "no account name: set username on the connection, or export FVPN_ACCOUNT"
+[[ -n "$account" ]] || die "no account name: set one in the plugin's settings, or export FVPN_ACCOUNT"
 
 secret-tool lookup service "$SERVICE" account "$account" >/dev/null 2>&1 \
-  || die "no keyring credential for $account — run: fvpn-creds store"
+  || die "no keyring credential for $account — open the plugin's settings to store one"
 
 down_active_vpns "$uuid"
+
+started="$(date '+%Y-%m-%d %H:%M:%S')"
 
 # secret-tool's stdout feeds nmcli's stdin directly, so the password is never
 # held in a variable and never appears in the process table.
@@ -95,13 +178,25 @@ rc=0
       nmcli --wait $((WAIT_SECS - 5)) connection up uuid "$uuid" passwd-file /dev/stdin \
   || rc=$?
 
+fail() {
+    local result="$1" msg="$2"
+    record "$id" "$result" "$msg"
+    die "$msg"
+}
+
 if (( rc != 0 )); then
     # nmcli stopped waiting, which is not the same as NM giving up. Only call it
     # a failure once NM itself is no longer trying.
     state="$(nmcli -g GENERAL.STATE connection show uuid "$uuid" 2>/dev/null)"
     if [[ "$state" != activating* ]]; then
-        (( rc == 124 )) && die "timed out after ${WAIT_SECS}s — server did not respond"
-        die "connection failed (rc=$rc)"
+        verdict="$(diagnose "$started")"
+        why="${verdict#*|}"
+        case "${verdict%%|*}" in
+            auth)        fail auth "${why}" ;;
+            unreachable) fail unreachable "${why}" ;;
+        esac
+        (( rc == 124 )) && fail unreachable "timed out after ${WAIT_SECS}s — server did not respond"
+        fail inconclusive "connection failed (rc=$rc)"
     fi
     echo "still negotiating, waiting up to ${GRACE_SECS}s more..." >&2
 fi
@@ -109,14 +204,37 @@ fi
 # nmcli can return while NM still reports "activating"; wait for the real state
 # rather than reporting success on a fork, which is how the old script lied.
 deadline=$(( SECONDS + GRACE_SECS ))
+activated=0
 while (( SECONDS < deadline )); do
     case "$(nmcli -g GENERAL.STATE connection show uuid "$uuid" 2>/dev/null)" in
-        activated*)  echo "connected: $conn"; exit 0 ;;
+        activated*)  activated=1; break ;;
         activating*) sleep 0.5 ;;
-        *)           die "authentication failed or the connection was rejected" ;;
+        *)           verdict="$(diagnose "$started")"
+                     why="${verdict#*|}"
+                     case "${verdict%%|*}" in
+                         auth)        fail auth "${why}" ;;
+                         unreachable) fail unreachable "${why}" ;;
+                     esac
+                     fail inconclusive "authentication failed or the connection was rejected" ;;
     esac
 done
-# Leave nothing half-up: a connection stuck activating would otherwise block the
-# next attempt, since down_active_vpns only tears down what is already active.
-nmcli connection down uuid "$uuid" >/dev/null 2>&1 || true
-die "$conn did not finish connecting within $((WAIT_SECS + GRACE_SECS))s"
+
+if (( ! activated )); then
+    # Leave nothing half-up: a connection stuck activating would otherwise block
+    # the next attempt, since down_active_vpns only tears down what is active.
+    nmcli connection down uuid "$uuid" >/dev/null 2>&1 || true
+    fail unreachable "did not finish connecting within $((WAIT_SECS + GRACE_SECS))s"
+fi
+
+# "Activated" is not the same as usable. NM reports the VPN up as soon as the
+# tunnel is established, but a server that hands out no address — or a
+# link-local placeholder — leaves every route pointing into a black hole. This
+# is the "invalid IP" case, and it is checked here rather than by probing later.
+addr="$(nmcli -g IP4.ADDRESS connection show uuid "$uuid" 2>/dev/null | head -1 | cut -d/ -f1)"
+if [[ -z "$addr" || "$addr" == "0.0.0.0" || "$addr" == 169.254.* ]]; then
+    nmcli connection down uuid "$uuid" >/dev/null 2>&1 || true
+    fail unreachable "tunnel came up without a usable address (${addr:-none})"
+fi
+
+record "$id" ok "$addr"
+echo "connected: $conn ($addr)"
