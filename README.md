@@ -51,6 +51,10 @@ next rather than reciting all of them:
 
 ## Requirements
 
+You need a **FastestVPN account**. The plugin drives a subscription you already
+have; it does not create one, and the profiles are useless without credentials
+to authenticate them.
+
 Everything the plugin runs is present on a default Omarchy except one package,
 which the first step installs:
 
