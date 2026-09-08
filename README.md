@@ -20,6 +20,26 @@ half, and it is already on every Omarchy box:
 
 So the running plugin is a plain unprivileged `nmcli` client.
 
+## Install and remove
+
+    omarchy plugin add https://github.com/nzkritik/omarchy-fastestvpn
+
+Then add the **FastestVPN** widget to the bar and follow **First run** below.
+
+Removing it takes two steps more than most plugins, because the import created
+NetworkManager connections and a keyring entry that both outlive the plugin.
+Undo them in this order, while the scripts are still there:
+
+    bin/fvpn-creds forget            # clear the keyring entry
+    sudo bash bin/fvpn-wipe --yes    # remove every fvpn-* connection, profile and certificate
+    omarchy plugin remove nzkritik.fastestvpn
+
+Credentials go first: `fvpn-creds` finds the account from the connections, so
+after a wipe it has nothing to look up. `fvpn-wipe` takes `--dry-run` to list
+what would go, and removes only what the import created. If the plugin is
+already gone, the connections can still be cleared with `nmcli connection
+delete <name>` for each `fvpn-*` entry.
+
 ## First run
 
 Installing the plugin downloads nothing. `omarchy plugin add` clones the repo
