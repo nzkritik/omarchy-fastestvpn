@@ -22,9 +22,12 @@ So the running plugin is a plain unprivileged `nmcli` client.
 
 ## Install and remove
 
-    omarchy plugin add https://github.com/nzkritik/omarchy-fastestvpn
+    omarchy plugin add https://github.com/nzkritik/omarchy-fastestvpn --enable
 
-Then add the **FastestVPN** widget to the bar and follow **First run** below.
+`--enable` puts the widget straight on the bar. Leave it off if you would rather
+read the code first and enable it later with
+`omarchy plugin enable nzkritik.fastestvpn`. Either way, setup happens in the
+panel — follow **First run** below.
 
 Removing it takes two steps more than most plugins, because the import created
 NetworkManager connections and a keyring entry that both outlive the plugin.
