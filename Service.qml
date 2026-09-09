@@ -746,11 +746,7 @@ Item {
     }
     onExited: function (code) {
       root.updating = false
-      // rc 126/127 is pkexec's "dismissed or not authorised", which is a user
-      // decision rather than a failure worth shouting about.
-      root.updateStatus = code === 0 ? "Profiles imported"
-                        : (code === 126 || code === 127) ? "Import cancelled"
-                        : "Import failed"
+      root.updateStatus = code === 0 ? "Profiles imported" : "Import failed"
       root.refreshInstalled()
       // A fresh import is the moment new endpoints appear, and locating them
       // costs nothing but an API call each — so do it now rather than leaving
@@ -764,10 +760,13 @@ Item {
     root.lastError = ""
     root.updating = true
     root.updateStatus = "Importing into NetworkManager\u2026"
-    // No --user: $USER is just environment and must not decide which account
-    // a root script reads files as. fvpn-import-profiles derives it from
-    // PKEXEC_UID, which pkexec sets itself.
-    importProcess.command = ["pkexec", "bash", root.importBin,
+    // Unprivileged, like everything else this plugin runs. NetworkManager is
+    // the only component that needs privilege and it already has it: polkit
+    // grants settings.modify.system to a local wheel user with no prompt, so
+    // the import runs as us. Nothing here executes plugin code as root — which
+    // it must not, since this directory is user-writable and its contents can
+    // change between the moment a prompt is answered and the moment root runs.
+    importProcess.command = ["bash", root.importBin,
                              "--dir", root.profileDir,
                              "--account", root.account]
     importProcess.running = true

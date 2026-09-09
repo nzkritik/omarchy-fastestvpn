@@ -33,8 +33,8 @@ Removing it takes two steps more than most plugins, because the import created
 NetworkManager connections and a keyring entry that both outlive the plugin.
 Undo them in this order, while the scripts are still there:
 
-    bin/fvpn-creds forget            # clear the keyring entry
-    sudo bash bin/fvpn-wipe --yes    # remove every fvpn-* connection, profile and certificate
+    bin/fvpn-creds forget       # clear the keyring entry
+    bin/fvpn-wipe --yes         # remove every fvpn-* connection and certificate
     omarchy plugin remove nzkritik.fastestvpn
 
 Credentials go first: `fvpn-creds` finds the account from the connections, so
@@ -147,14 +147,42 @@ it only looks up what it does not already know.
     bin/fvpn-connect <conn>     # connect, or --down to disconnect
     bin/fvpn-creds              # keyring credential
 
-Root, via pkexec, and both take `--dry-run`:
+Both of these take `--dry-run`:
 
     bin/fvpn-import-profiles    # create the NetworkManager connections
-    bin/fvpn-wipe               # remove every connection, profile and certificate
+    bin/fvpn-wipe               # remove every connection and certificate
 
-Reads of the profile directory are performed *as the invoking user* via
-`runuser`, so a symlink planted in that user-writable directory cannot walk root
-into a file it should not read.
+## Privilege
+
+**Nothing in this plugin runs as root, and nothing in it escalates.**
+
+NetworkManager is the only component that needs privilege, and it already has
+it. Stock Arch ships
+`/usr/share/polkit-1/rules.d/org.freedesktop.NetworkManager.rules`, which grants
+`org.freedesktop.NetworkManager.settings.modify.system` to a local user in the
+`wheel` group with no prompt, so importing and removing connections both run as
+you. Check your own session with:
+
+    pkcheck --action-id org.freedesktop.NetworkManager.settings.modify.system --process $$
+
+That is also the only arrangement that can work from the panel: `omarchy-shell`
+is a long-lived process with no TTY and Omarchy ships no polkit authentication
+agent, so there is no dialog an escalation prompt could ever be answered in. If
+the rule does not cover your session the import says so and explains what is
+missing, rather than reaching for privilege.
+
+Because the import runs as you, NetworkManager extracts each profile's inline
+`<ca>`/`<tls-auth>` blob to
+`~/.local/share/networkmanagement/certificates/nm-openvpn/` at `0600`, owned by
+you. Activation still works because the OpenVPN service declares
+`supports-safe-private-file-access=true` — NM opens the certificate on the
+activating user's behalf. Only a *root* import ever had to copy certificates
+into a world-readable directory under `/etc`.
+
+The profile directory is user-writable and its path is predictable, so no tool
+is pointed straight at a path inside it. Each profile is copied out through a
+no-follow, non-blocking, byte-bounded read into a private staging directory, and
+`nmcli` only ever sees the staged copy under a name the importer chose.
 
 ## Attribution
 

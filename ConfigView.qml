@@ -243,8 +243,7 @@ ColumnLayout {
             text: "Import profiles"
             enabled: cfg.service && cfg.service.configured && !cfg.service.updating
             tooltipText: "Create a NetworkManager connection for each profile.\n"
-                        + "Asks for your password once — this is the only step\n"
-                        + "that needs administrator rights."
+                        + "Runs as you — no password, and nothing here runs as root."
             onClicked: if (cfg.service) cfg.service.importProfiles()
           }
 

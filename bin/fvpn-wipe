@@ -2,22 +2,30 @@
 # ---------------------------------------------------------------------------
 # fvpn-wipe — remove every trace of this plugin's NetworkManager profiles
 #
-#   sudo bash fvpn-wipe --dry-run    list what would go
-#   sudo bash fvpn-wipe --yes        do it
+#   bash fvpn-wipe --dry-run    list what would go (the default)
+#   bash fvpn-wipe --yes        do it
 #
-# Deletes only what this plugin created:
+# UNPRIVILEGED, like the importer. Deleting a system connection is the same
+# polkit action as creating one, and the certificates an unprivileged import
+# extracts live in your own data directory, so nothing here needs root.
+#
+# Removes only what this plugin created:
 #   * NetworkManager connections named fvpn-*
-#   * top-level /etc/openvpn/<id>-{udp,tcp}.ovpn profiles it installed
-#   * the legacy startVPN.sh bundle (udp_files/, tcp_files/, the zip)
-#   * /etc/NetworkManager/certificates/fvpn/
+#   * $XDG_DATA_HOME/networkmanagement/certificates/nm-openvpn/fvpn-*.pem
+#
+# Versions of this plugin up to 0.2.0 imported as root, which staged profiles in
+# /etc/openvpn and copied certificates into /etc/NetworkManager/certificates/fvpn.
+# Those paths are root-owned, so this script REPORTS them and prints the command
+# to remove them rather than asking for privilege it otherwise never wants.
 #
 # Never touches /etc/openvpn/{client,server} — those belong to the openvpn
 # package — nor the keyring credential, nor the endpoint catalogue.
 # ---------------------------------------------------------------------------
 set -uo pipefail
 
-OVPN_DIR=/etc/openvpn
-CERT_DIR=/etc/NetworkManager/certificates/fvpn
+CERT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/networkmanagement/certificates/nm-openvpn"
+LEGACY_OVPN_DIR=/etc/openvpn
+LEGACY_CERT_DIR=/etc/NetworkManager/certificates/fvpn
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
@@ -30,35 +38,43 @@ for a in "$@"; do
     esac
 done
 
-[[ $EUID -eq 0 ]] || die "must run as root"
+(( EUID != 0 )) || die "do not run this as root; it is meant to run as your own user"
 command -v nmcli >/dev/null || die "nmcli not found"
 
 # ── Inventory ───────────────────────────────────────────────────────────────
 mapfile -t conns < <(nmcli -t -f NAME connection show 2>/dev/null | grep '^fvpn-' || true)
 
-# Only the flat <id>-udp.ovpn / <id>-tcp.ovpn files the importer wrote. -maxdepth 1
-# keeps this away from the package's client/ and server/ directories entirely.
-mapfile -t profiles < <(
-  find "$OVPN_DIR" -maxdepth 1 -type f \
-       \( -name '*-udp.ovpn' -o -name '*-tcp.ovpn' \) -print 2>/dev/null | sort
+# -maxdepth 1 -type f keeps this to plain files we wrote, and skips a symlink
+# planted in a directory that is, like any path under $HOME, user-writable.
+mapfile -t certs < <(
+  find "$CERT_DIR" -maxdepth 1 -type f -name 'fvpn-*.pem' -print 2>/dev/null | sort
 )
 
+# Summarised, not enumerated: a full import leaves 134 staged profiles and
+# printing them all buries everything else this script has to say.
+legacy_ovpn=$(
+  find "$LEGACY_OVPN_DIR" -maxdepth 1 -type f \
+       \( -name '*-udp.ovpn' -o -name '*-tcp.ovpn' \) -print 2>/dev/null | wc -l
+)
 legacy=()
-for p in "$OVPN_DIR/udp_files" "$OVPN_DIR/tcp_files" "$OVPN_DIR/fastestvpn_ovpn.zip"; do
+(( legacy_ovpn )) && legacy+=("$LEGACY_OVPN_DIR/*-{udp,tcp}.ovpn  ($legacy_ovpn files)")
+for p in "$LEGACY_OVPN_DIR/udp_files" "$LEGACY_OVPN_DIR/tcp_files" \
+         "$LEGACY_OVPN_DIR/fastestvpn_ovpn.zip" "$LEGACY_CERT_DIR"; do
     [[ -e "$p" ]] && legacy+=("$p")
 done
 
-certs=0
-[[ -d "$CERT_DIR" ]] && certs=$(find "$CERT_DIR" -type f 2>/dev/null | wc -l)
-
 printf 'NetworkManager connections : %d\n' "${#conns[@]}"
-printf 'profiles in %-14s: %d\n' "$OVPN_DIR" "${#profiles[@]}"
-printf 'legacy bundle paths        : %d %s\n' "${#legacy[@]}" "${legacy[*]:-}"
-printf 'certificate files          : %d (%s)\n' "$certs" "$CERT_DIR"
+printf 'certificate files          : %d (%s)\n' "${#certs[@]}" "$CERT_DIR"
+printf 'root-owned leftovers       : %d path(s)\n' "${#legacy[@]}"
 
 if (( dry )); then
     echo
     echo "(dry run — nothing changed; pass --yes to remove)"
+    if (( ${#legacy[@]} )); then
+        echo
+        echo "Root-owned leftovers from a pre-0.3.0 import, listed but never touched:"
+        printf '  %s\n' "${legacy[@]}"
+    fi
     exit 0
 fi
 
@@ -77,25 +93,27 @@ for c in "${conns[@]}"; do
     # than once per listed row.
     while nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$c"; do
         nmcli connection delete id "$c" >/dev/null 2>&1 || break
-        (( deleted++ ))
+        deleted=$((deleted + 1))
     done
 done
 echo "removed $deleted NetworkManager connection(s)"
 
-(( ${#profiles[@]} )) && rm -f -- "${profiles[@]}"
-echo "removed ${#profiles[@]} profile(s) from $OVPN_DIR"
-
-(( ${#legacy[@]} )) && rm -rf -- "${legacy[@]}"
-echo "removed ${#legacy[@]} legacy bundle path(s)"
-
-if [[ -d "$CERT_DIR" ]]; then
-    rm -rf -- "$CERT_DIR"
-    echo "removed $CERT_DIR ($certs file(s))"
-fi
+(( ${#certs[@]} )) && rm -f -- "${certs[@]}"
+echo "removed ${#certs[@]} certificate file(s)"
 
 nmcli connection reload 2>/dev/null || true
 
-echo
 remaining=$(nmcli -t -f NAME connection show 2>/dev/null | grep -c '^fvpn-')
 echo "remaining fvpn-* connections: $remaining"
+
+if (( ${#legacy[@]} )); then
+    echo
+    echo "Left in place, because they are root-owned and this plugin does not"
+    echo "ask for privilege. They are inert once the connections above are gone."
+    printf '  %s\n' "${legacy[@]}"
+    echo
+    echo "They are root-owned, so removing them needs root rights — do that"
+    echo "yourself, with the paths above, if you want them gone."
+fi
+
 [[ "$remaining" == "0" ]] || die "some connections survived — inspect manually"

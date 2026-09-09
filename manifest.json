@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "nzkritik.fastestvpn",
   "name": "FastestVPN",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "nzkritik",
   "license": "MIT",
   "description": "Connect, switch and monitor FastestVPN locations from the Omarchy bar, with a world map of exit points.",
