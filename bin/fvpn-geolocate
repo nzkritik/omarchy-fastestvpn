@@ -156,6 +156,39 @@ def save_table(path, rows):
     os.replace(tmp, path)
 
 
+MAX_DEPTH = 3   # matches the importer: the vendor zip plus a file manager's wrapper folder
+
+
+def list_profiles(profile_dir):
+    """-> [(filename, path)] for every .ovpn up to MAX_DEPTH levels down, as the
+    importer reads them: FastestVPN's zip unpacks into udp_files/ and
+    tcp_files/. Symlinks and hidden entries are skipped and linked directories
+    are never entered. Shallowest first, and the first file of a given name
+    wins, so the table stays keyed by filename exactly as before."""
+    found = []
+
+    def scan(d, rel, depth):
+        try:
+            entries = list(os.scandir(d))
+        except OSError:
+            return
+        for e in entries:
+            if e.name.startswith("."):
+                continue
+            if e.is_dir(follow_symlinks=False):
+                if depth < MAX_DEPTH:
+                    scan(e.path, rel + e.name + "/", depth + 1)
+            elif (e.is_file(follow_symlinks=False) and e.name.endswith(".ovpn")
+                  and ID_RE.match(e.name[:-5] or "x")):
+                found.append((depth, rel + e.name, e.name, e.path))
+
+    scan(profile_dir, "", 1)
+    chosen = {}
+    for _, _, name, path in sorted(found):
+        chosen.setdefault(name, path)
+    return sorted(chosen.items())
+
+
 def main():
     ap = argparse.ArgumentParser(add_help=True)
     ap.add_argument("--dir", default=default_dir())
@@ -173,15 +206,10 @@ def main():
     if not os.path.isdir(profile_dir) or os.path.islink(profile_dir):
         die(f"not a directory (or is a symlink): {profile_dir}")
 
-    names = sorted(
-        n for n in os.listdir(profile_dir)
-        if n.endswith(".ovpn")
-        and ID_RE.match(n[:-5] or "x")
-        and os.path.isfile(os.path.join(profile_dir, n))
-        and not os.path.islink(os.path.join(profile_dir, n))
-    )
+    paths = dict(list_profiles(profile_dir))
+    names = sorted(paths)
     if not names:
-        die(f"no .ovpn files in {profile_dir}")
+        die(f"no .ovpn files in {profile_dir} (or its subfolders)")
 
     existing = {} if args.all else load_table(args.table)
 
@@ -192,7 +220,7 @@ def main():
     # table.
     plan, kept, unresolved = [], [], []
     for name in names:
-        host, proto_body = parse_profile(read_profile(os.path.join(profile_dir, name)))
+        host, proto_body = parse_profile(read_profile(paths[name]))
         if not host or not HOST_RE.match(host):
             unresolved.append((name, "no usable remote line"))
             continue

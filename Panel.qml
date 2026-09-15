@@ -657,10 +657,10 @@ Panel {
           text: {
             if (root.firstRunStep === "account")
               return "Add your FastestVPN account and password in settings, then\n"
-                   + "download the location profiles."
+                   + "add the location profiles."
             if (root.firstRunStep === "profiles")
-              return "Download FastestVPN's location profiles in settings —\n"
-                   + "or drop your own .ovpn files into the profile directory."
+              return "Download FastestVPN's profile bundle and unzip it into the\n"
+                   + "profile folder — or drop in .ovpn files of your own."
             return "The profiles are ready. Import them in settings to turn them\n"
                  + "into connections you can use."
           }
@@ -672,8 +672,27 @@ Panel {
 
         Button {
           Layout.alignment: Qt.AlignHCenter
+          visible: root.firstRunStep !== "profiles"
           text: root.firstRunStep === "import" ? "Import profiles" : "Open settings"
           onClicked: root.configOpen = true
+        }
+
+        // The one step the plugin cannot do for the user, so it hands over
+        // both halves directly instead of sending them through settings.
+        RowLayout {
+          Layout.alignment: Qt.AlignHCenter
+          visible: root.firstRunStep === "profiles"
+          spacing: Style.space(6)
+
+          Button {
+            text: "Download bundle"
+            onClicked: if (root.service) root.service.openDownloadPage()
+          }
+
+          Button {
+            text: "Open folder"
+            onClicked: if (root.service) root.service.openProfileDir()
+          }
         }
 
         Item { Layout.fillHeight: true }

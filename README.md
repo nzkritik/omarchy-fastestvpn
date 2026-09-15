@@ -15,10 +15,13 @@ half, and it is already on every Omarchy box:
 
 - `org.freedesktop.NetworkManager.network-control` defaults to
   `allow_active=yes`, so bringing a connection up or down never prompts.
-- Importing profiles needs `settings.modify.system` (`auth_admin_keep`), which
-  is a one-time setup step, not something the bar does.
+- Importing profiles needs `settings.modify.system`, which stock Arch grants to
+  a local user in `wheel` with no prompt — see **Privilege** below.
 
-So the running plugin is a plain unprivileged `nmcli` client.
+So the running plugin is a plain unprivileged `nmcli` client. It also
+**downloads no VPN configuration**: you fetch FastestVPN's profile bundle
+yourself and unpack it where the plugin can read it, so nothing the plugin
+imports can change behind your back.
 
 ## Install and remove
 
@@ -45,20 +48,21 @@ delete <name>` for each `fvpn-*` entry.
 
 ## First run
 
-Installing the plugin downloads nothing. `omarchy plugin add` clones the repo
-and stops there — it never runs code from it, which is what lets you review a
-plugin before enabling it. So setup happens in the panel, from the gear in its
-header.
+Installing the plugin downloads nothing, and neither does the plugin once it is
+running. `omarchy plugin add` clones the repo and stops there — it never runs
+code from it, which is what lets you review a plugin before enabling it. So
+setup happens in the panel, from the gear in its header.
 
 1. `omarchy pkg add networkmanager-openvpn`
 2. Open the panel and click the gear. Fill in your **account**, **Save** the
    password, and set the **profile directory** if you do not want the default
    `~/.local/share/fastestvpn/profiles`.
-3. **Refresh profiles** downloads FastestVPN's current bundle into that
-   directory. **Add profiles…** copies in `.ovpn` files of your own; both can
-   be used together.
-4. **Import profiles** turns them into NetworkManager connections. This is the
-   only step that asks for your password.
+3. Put FastestVPN's profiles in that directory yourself — see **Getting the
+   profiles** below. **Download bundle** opens the download in your browser,
+   and **Open folder** opens the directory, creating it first. **Add
+   profiles…** copies in `.ovpn` files of your own; both can be used together.
+4. **Import profiles** turns them into NetworkManager connections. It runs as
+   you and asks for nothing.
 
 Locations appear as soon as the import finishes, and **Locate new** runs by
 itself to fill in where each endpoint is.
@@ -69,8 +73,28 @@ next rather than reciting all of them:
 | Panel says | What to do |
 |---|---|
 | Add your FastestVPN account and password in settings | fill in the account, then **Save** the password |
-| Download FastestVPN's location profiles in settings | **Refresh profiles**, or add your own `.ovpn` files |
+| Download FastestVPN's profile bundle and unzip it into the profile folder | **Download bundle**, then unzip it with **Open folder**, or add your own `.ovpn` files |
 | The profiles are ready. Import them in settings | **Import profiles** |
+
+### Getting the profiles
+
+The plugin does not fetch VPN configuration for you. A profile decides which
+server you connect to and which certificate that server is trusted by, so it
+comes from you rather than from a download the plugin makes on its own.
+
+FastestVPN publishes every profile in one zip,
+<https://support.fastestvpn.com/download/fastestvpn_ovpn/>, which saves as
+`fastestvpn_ovpn.zip`. Unzip it into the profile directory as it is:
+
+    unzip ~/Downloads/fastestvpn_ovpn.zip -d ~/.local/share/fastestvpn/profiles
+
+or click **Open folder**, drop the zip in, and choose **Extract**. The zip holds
+`udp_files/` and `tcp_files/`, and the importer reads up to two folders down,
+so either way works without moving anything.
+
+Importing only adds locations it does not have yet. When FastestVPN moves a
+server, unzip the new bundle over the old one, remove the existing connections
+with `bin/fvpn-wipe --yes`, and import again.
 
 ## Requirements
 
@@ -142,7 +166,6 @@ it only looks up what it does not already know.
 
 ## Tools
 
-    bin/fvpn-fetch-profiles     # download the bundle into the profile directory
     bin/fvpn-geolocate          # locate endpoints not located yet (--all for every one)
     bin/fvpn-connect <conn>     # connect, or --down to disconnect
     bin/fvpn-creds              # keyring credential
@@ -191,16 +214,19 @@ so nothing is resolved through an inherited `PATH`, and hooks such as
 `LD_PRELOAD`, `BASH_ENV` or `PYTHONPATH` never reach a child. The scripts pin
 `PATH` again themselves, so they behave the same when run by hand.
 
-**Refresh profiles** only ever handles the bundle as data, and within bounds.
-One Python program downloads it into memory and parses it as a zip. It is never
-written to disk as a download or handed to another program, and only the
-`.ovpn` text it contains leaves. The request is HTTPS-only (redirects included),
-verifies the certificate, follows at most 3 redirects, stops at 8 MiB and gives
-up after 90 s. Extraction ignores the sizes the archive declares: it reads each
-profile from the decompressed stream, up to 256 KiB, and refuses a bundle that
-expands past 16 MiB. Each profile is written as `0644` through an exclusive temporary file
-and an atomic rename, so a link or FIFO planted at its name is replaced rather
-than followed. The real bundle is about 300 KB.
+**The plugin downloads no VPN configuration.** Profiles control the server, the
+certificate it is trusted by, and potentially routing and DNS, and a download
+the plugin made by itself would not be bound to anything a reviewer saw. So
+they come only from you, and the plugin never replaces them behind your back.
+**Download bundle** and **Open folder** only hand a URL to your desktop's own
+handler.
+
+The importer reads the profile directory up to three levels down, which covers
+the bundle as unzipped and as wrapped by a file manager's **Extract**. It never
+follows a symlinked directory, prunes hidden entries, and reports anything it
+passes over: a `*.ovpn` that is a link or a FIFO, a linked directory, a file
+with an unusable name, or a second file wanting the same connection. Where two
+files would make the same connection, the one nearest the top wins.
 
 ## Attribution
 

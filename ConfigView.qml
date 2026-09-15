@@ -211,9 +211,17 @@ ColumnLayout {
           }
 
           Button {
-            text: "Refresh profiles"
-            enabled: cfg.service && !cfg.service.updating
-            onClicked: if (cfg.service) cfg.service.fetchProfiles()
+            text: "Download bundle"
+            tooltipText: "Open FastestVPN's profile bundle in your browser.\n"
+                        + "The plugin itself downloads nothing."
+            onClicked: if (cfg.service) cfg.service.openDownloadPage()
+          }
+
+          Button {
+            text: "Open folder"
+            enabled: cfg.service && cfg.service.profileDir !== ""
+            tooltipText: "Open the profile directory, creating it if needed"
+            onClicked: if (cfg.service) cfg.service.openProfileDir()
           }
 
           Item { Layout.fillWidth: true }
@@ -222,7 +230,8 @@ ColumnLayout {
         FieldLabel {
           Layout.fillWidth: true
           wrapMode: Text.WordWrap
-          text: "Every .ovpn file here becomes a selectable location once imported. "
+          text: "Unzip FastestVPN's bundle here as it is — its subfolders are read too. "
+              + "Every .ovpn file becomes a selectable location once imported. "
               + "Files named <name>-udp.ovpn or <name>-tcp.ovpn set the transport; "
               + "anything else is read from the profile's own proto line."
         }

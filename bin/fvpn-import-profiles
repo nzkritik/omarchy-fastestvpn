@@ -80,27 +80,37 @@ if command -v pkcheck >/dev/null 2>&1; then
 fi
 
 # ── Read the profile directory ──────────────────────────────────────────────
-# -type f is false for a symlink, so a planted link is skipped rather than
-# followed, and find never descends out of the directory.
+# FastestVPN's zip unpacks into udp_files/ and tcp_files/, and a file manager's
+# "Extract" wraps those in one more folder named after the archive, so profiles
+# are read up to MAX_DEPTH levels down. find never follows a symlinked
+# directory, -type f is false for a symlink, and hidden entries are pruned, so
+# nothing outside the directory tree is reached.
+MAX_DEPTH=3
 [[ -d "$dir" && ! -L "$dir" ]] || die "not a directory (or is a symlink): $dir"
 
-mapfile -t names < <(
-  find "$dir" -maxdepth 1 -type f -name '*.ovpn' -printf '%f\n' 2>/dev/null | sort
-)
+tree() { find "$dir" -mindepth 1 -maxdepth "$MAX_DEPTH" -name '.*' -prune -o "$@" 2>/dev/null; }
 
-# Say so when something matching *.ovpn was passed over for not being a regular
-# file. A skip that prints nothing is indistinguishable from a file that was
-# never there, and that difference is exactly what costs an afternoon later.
+# Paths relative to $dir, shallowest first, so a file placed at the top beats
+# a same-named one inside an unpacked bundle.
+mapfile -d '' -t found < <(tree -type f -name '*.ovpn' -printf '%d/%P\0' | LC_ALL=C sort -z)
+names=()
+for f in "${found[@]}"; do names+=("${f#*/}"); done
+
+# Say so when something was passed over: a *.ovpn that is not a regular file,
+# or a linked directory find will not enter. A skip that prints nothing is
+# indistinguishable from a file that was never there, and that difference is
+# exactly what costs an afternoon later.
 mapfile -t irregular < <(
-  find "$dir" -maxdepth 1 ! -type d ! -type f -name '*.ovpn' -printf '%f (%y)\n' 2>/dev/null | sort
+  tree \( ! -type d ! -type f -name '*.ovpn' -printf '%P (%y)\n' \) \
+    -o \( -type l -xtype d -printf '%P (link to a directory, not followed)\n' \) | LC_ALL=C sort
 )
 if (( ${#irregular[@]} )); then
-    echo "skipped ${#irregular[@]} entr(ies) that are not regular files:" >&2
+    echo "skipped ${#irregular[@]} entr(ies) that are not regular files or folders:" >&2
     printf '  %s\n' "${irregular[@]}" >&2
     echo >&2
 fi
 
-(( ${#names[@]} )) || die "no .ovpn files in $dir"
+(( ${#names[@]} )) || die "no .ovpn files in $dir (or its subfolders)"
 
 stage="$(mktemp -d "${TMPDIR:-/tmp}/fvpn-import.XXXXXX")" || die "cannot create a staging directory"
 chmod 0700 "$stage"
@@ -116,35 +126,47 @@ read_guarded() {
 # Bundle files are <id>-udp.ovpn / <id>-tcp.ovpn. A file dropped in by hand may
 # be named anything, so fall back to its `proto` line. UDP takes the plain name
 # and TCP gets the -tcp suffix, which is what the UI expects.
-declare -A want_conn=()
-for base in "${names[@]}"; do
-    [[ "$base" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.ovpn$ ]] || {
-        echo "  skip (bad name): $base" >&2; continue
+declare -A want_conn=() taken=()
+for rel in "${names[@]}"; do
+    # Folder names only ever travel inside a path, which find produced from
+    # within $dir. The file name becomes a connection name, so it alone gets
+    # the strict check.
+    file="${rel##*/}"
+    [[ "$rel" =~ ^([^/[:cntrl:]]+/)*[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.ovpn$ ]] || {
+        echo "  skip (bad name): $rel" >&2; continue
     }
-    stem="${base%.ovpn}"
+    stem="${file%.ovpn}"
     case "$stem" in
         *-udp) id="${stem%-udp}"; proto=udp ;;
         *-tcp) id="${stem%-tcp}"; proto=tcp ;;
         *)     id="$stem"
-               proto="$(read_guarded "$dir/$base" \
+               proto="$(read_guarded "$dir/$rel" \
                         | sed -n 's/^[[:space:]]*proto[[:space:]]\+\([a-z]*\).*/\1/p' | head -1)"
                proto="${proto:-udp}" ;;
     esac
     [[ "$proto" == tcp* ]] && proto=tcp || proto=udp
-    [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "  skip (bad id): $base" >&2; continue; }
+    [[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || { echo "  skip (bad id): $rel" >&2; continue; }
     conn="fvpn-$id"; [[ "$proto" == tcp ]] && conn="fvpn-$id-tcp"
-    want_conn["$base"]="$conn"
+    # The same bundle unpacked twice, or a file both at the top and in a
+    # subfolder, would otherwise fight over one connection name.
+    if [[ -n "${taken[$conn]:-}" ]]; then
+        echo "  skip (same location as ${taken[$conn]}): $rel" >&2; continue
+    fi
+    taken["$conn"]="$rel"
+    want_conn["$rel"]="$conn"
 done
 (( ${#want_conn[@]} )) || die "no usable profiles in $dir"
 
 existing() { nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$1"; }
 
 todo=(); skipped=0
-for base in "${!want_conn[@]}"; do
-    if existing "${want_conn[$base]}"; then skipped=$((skipped + 1)); continue; fi
-    todo+=("$base")
+for rel in "${!want_conn[@]}"; do
+    if existing "${want_conn[$rel]}"; then skipped=$((skipped + 1)); continue; fi
+    todo+=("$rel")
 done
-IFS=$'\n' todo=($(sort <<<"${todo[*]:-}")); unset IFS
+if (( ${#todo[@]} )); then
+    mapfile -t todo < <(printf '%s\n' "${todo[@]}" | LC_ALL=C sort)
+fi
 
 printf 'profiles found     : %d\n' "${#want_conn[@]}"
 printf 'already imported   : %d\n' "$skipped"
@@ -155,8 +177,9 @@ if (( dry )); then echo; echo "(dry run — nothing changed)"; exit 0; fi
 echo
 
 imported=0; failed=0
-for base in "${todo[@]}"; do
-    conn="${want_conn[$base]}"
+for rel in "${todo[@]}"; do
+    base="$rel"
+    conn="${want_conn[$rel]}"
     # Stage under the name we want the connection to have: nmcli names the
     # connection after the file stem, and NM derives the certificate filenames
     # from it too, so importing as fvpn-<id> both skips a rename and keeps the

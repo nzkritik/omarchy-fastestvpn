@@ -121,7 +121,6 @@ Item {
   property string updateStatus: ""
   property int profileCount: 0
   property bool credentialPresent: false
-  readonly property string fetchBin: pluginDir + "bin/fvpn-fetch-profiles"
   readonly property string importBin: pluginDir + "bin/fvpn-import-profiles"
   readonly property string credsBin: pluginDir + "bin/fvpn-creds"
 
@@ -697,10 +696,12 @@ Item {
 
   function refreshProfileCount() {
     if (countProcess.running || profileDir === "") return
-    // -maxdepth 1 -type f excludes symlinks and subdirectories, matching
-    // exactly what the importer will agree to read.
+    // The same walk the importer makes: up to three levels down (an unpacked
+    // bundle), hidden entries pruned, symlinks neither counted nor followed.
+    // One byte per file rather than one line, so odd names cannot skew it.
     countProcess.command = ["/usr/bin/sh", "-c",
-      "find \"$1\" -maxdepth 1 -type f -name '*.ovpn' 2>/dev/null | wc -l",
+      "/usr/bin/find \"$1\" -mindepth 1 -maxdepth 3 -name '.*' -prune"
+      + " -o -type f -name '*.ovpn' -printf x 2>/dev/null | /usr/bin/wc -c",
       "sh", profileDir]
     countProcess.running = true
   }
@@ -752,36 +753,38 @@ Item {
     credStoreProcess.stdinEnabled = false   // EOF, so the script stops reading
   }
 
-  // \u2500\u2500 Fetching and importing profiles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  // Two separate steps on purpose. Fetching just fills a directory; importing
-  // hands those files to NetworkManager. Both run unprivileged, and neither
-  // one connects to anything.
+  // \u2500\u2500 Getting and importing profiles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // The plugin downloads nothing. The user fetches FastestVPN's bundle and
+  // unpacks it into the profile directory; these helpers only open the
+  // download in the browser and the folder in the file manager, both through
+  // the desktop's own URL handler. Importing then hands the files to
+  // NetworkManager \u2014 unprivileged, and without connecting to anything.
+  readonly property string bundleUrl: "https://support.fastestvpn.com/download/fastestvpn_ovpn/"
+
+  function openDownloadPage() { Qt.openUrlExternally(bundleUrl) }
+
+  // Created first, so a fresh install has somewhere to unpack the bundle into.
   Process {
-    id: fetchProcess
+    id: mkdirProcess
     clearEnvironment: true
     environment: root.childEnv(null)
     running: false
     command: []
-    stderr: StdioCollector {
-      onStreamFinished: {
-        var msg = String(text).trim()
-        if (msg !== "") root.lastError = msg
-      }
-    }
     onExited: function (code) {
-      root.updating = false
-      root.updateStatus = code === 0 ? "Profiles updated" : "Could not fetch profiles"
+      if (code === 0) Qt.openUrlExternally(root.fileUrl(root.profileDir))
+      else root.updateStatus = "Could not create the profile directory"
       root.refreshProfileCount()
     }
   }
 
-  function fetchProfiles() {
-    if (updating || profileDir === "") return
-    root.lastError = ""
-    root.updating = true
-    root.updateStatus = "Downloading profiles\u2026"
-    fetchProcess.command = ["/usr/bin/python3", "-I", root.fetchBin, "--dir", root.profileDir]
-    fetchProcess.running = true
+  function fileUrl(path) {
+    return "file://" + path.split("/").map(encodeURIComponent).join("/")
+  }
+
+  function openProfileDir() {
+    if (mkdirProcess.running || profileDir.charAt(0) !== "/") return
+    mkdirProcess.command = ["/usr/bin/mkdir", "-p", "--", root.profileDir]
+    mkdirProcess.running = true
   }
 
   Process {
@@ -927,7 +930,9 @@ Item {
     interval: root.pollInterval
     running: true
     repeat: true
-    onTriggered: root.refresh()
+    // The count too: profiles are unpacked by hand now, outside anything the
+    // plugin runs, so nothing else would tell the panel they have arrived.
+    onTriggered: { root.refresh(); root.refreshProfileCount() }
   }
 
   // Configuration arrives after construction (the bar pushes it once shell.json
