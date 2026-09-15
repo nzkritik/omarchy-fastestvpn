@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 # ---------------------------------------------------------------------------
 # fvpn-connect — bring up a FastestVPN NetworkManager profile
 #
@@ -28,6 +28,11 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
+# A closed, fixed toolchain: every command below resolves from /usr/bin,
+# whatever PATH the caller arrived with.
+PATH=/usr/bin
+export PATH
+
 SERVICE=fastestvpn
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/fastestvpn"
 STATE_FILE="$STATE_DIR/endpoints.json"
@@ -52,7 +57,7 @@ record() {
     command -v python3 >/dev/null || return 0
     mkdir -p "$STATE_DIR" 2>/dev/null || return 0
     FVPN_ID="$id" FVPN_RESULT="$result" FVPN_DETAIL="$detail" \
-    FVPN_STATE="$STATE_FILE" python3 - <<'PY' 2>/dev/null || true
+    FVPN_STATE="$STATE_FILE" python3 -I - <<'PY' 2>/dev/null || true
 import json, os, tempfile, datetime
 path = os.environ["FVPN_STATE"]
 # This path is predictable and under $HOME, so anything running as this user

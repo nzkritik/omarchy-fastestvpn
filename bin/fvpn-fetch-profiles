@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 # ---------------------------------------------------------------------------
 # fvpn-fetch-profiles — fill the profile directory from FastestVPN's bundle
 #
@@ -11,11 +11,24 @@
 # This replaces the old download-inside-the-root-importer arrangement: the
 # importer now only ever reads the directory, so fetching needs no privilege
 # and the user can equally well drop their own .ovpn files in by hand.
+#
+# BOUNDED. The download is HTTPS-only (redirects included), capped in size
+# while it transfers, and rejected on any HTTP error. Extraction never trusts
+# the sizes the archive declares: each member is read from the decompressed
+# stream with a byte bound, and the total is capped, so a hostile or corrupt
+# archive cannot expand without limit. The real bundle is ~300 KB holding 134
+# profiles of ~3 KB each; every limit below sits far above that.
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
+# A closed, fixed toolchain: every command below resolves from /usr/bin,
+# whatever PATH the caller arrived with.
+PATH=/usr/bin
+export PATH
+
 BUNDLE_URL="https://support.fastestvpn.com/download/fastestvpn_ovpn/"
 DEFAULT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastestvpn/profiles"
+MAX_BUNDLE=8388608     # 8 MiB download cap
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
@@ -30,54 +43,183 @@ while (( $# )); do
 done
 [[ -n "$dir" ]] || die "empty profile directory"
 
-command -v curl  >/dev/null || die "curl required"
-command -v unzip >/dev/null || die "unzip required"
-command -v cksum >/dev/null || die "cksum required (coreutils)"
+command -v curl    >/dev/null || die "curl required"
+command -v python3 >/dev/null || die "python3 required"
 
 # Refuse a symlinked destination: this path comes from user settings and is
-# written to, so a link planted here would redirect the whole extraction.
+# written to, so a link planted here would redirect the whole extraction. The
+# extractor below re-checks by opening it O_NOFOLLOW and works only through
+# that descriptor, so a swap after this test gains nothing either.
 [[ ! -L "$dir" ]] || die "profile directory is a symlink: $dir"
 mkdir -p "$dir"
 [[ -d "$dir" && ! -L "$dir" ]] || die "not a directory: $dir"
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf -- "$tmp"' EXIT
 
 echo "downloading bundle…"
-curl -sL --max-time 90 -A 'Mozilla/5.0' "$BUNDLE_URL" -o "$tmp/bundle.zip" \
+curl --silent --show-error --location --fail \
+     --proto '=https' --proto-redir '=https' --max-redirs 3 \
+     --max-filesize "$MAX_BUNDLE" --max-time 90 -A 'Mozilla/5.0' \
+     "$BUNDLE_URL" -o "$tmp/bundle.zip" \
   || die "download failed"
-head -c2 "$tmp/bundle.zip" | grep -q PK || die "upstream did not return a zip"
 
-# -j flattens, so a crafted archive path cannot place a file outside $tmp/x.
-unzip -qq -j -o "$tmp/bundle.zip" -d "$tmp/x" '*.ovpn' || die "unzip failed"
+python3 -I - "$tmp/bundle.zip" "$dir" "$dry" "$MAX_BUNDLE" <<'PY'
+import os, re, secrets, stat, sys, zipfile
 
-added=0; same=0
-shopt -s nullglob
-for src in "$tmp"/x/*.ovpn; do
-    base="${src##*/}"
-    # The filename becomes a connection id later, so validate it here rather
-    # than trusting whatever the archive happened to contain.
-    [[ "$base" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.ovpn$ ]] || {
-        echo "  skip (bad name): $base"; continue
-    }
-    dst="$dir/$base"
-    # Assignment, not (( n++ )): post-increment evaluates to the OLD value, so
-    # the first increment from zero returns 1 and set -e kills the script.
-    # cksum, not cmp: cmp comes from diffutils, which is not part of Arch's
-    # base metapackage nor Omarchy's package list, whereas cksum is coreutils
-    # and always present.
-    if [[ -f "$dst" && ! -L "$dst" ]] \
-       && [[ "$(cksum < "$src")" == "$(cksum < "$dst")" ]]; then
-        same=$((same + 1)); continue
-    fi
-    (( dry )) || install -m 0644 "$src" "$dst"
-    added=$((added + 1))
-done
+bundle, target, dry, max_bundle = sys.argv[1], sys.argv[2], sys.argv[3] == "1", int(sys.argv[4])
+MAX_ENTRIES = 1000
+MAX_PROFILE = 262144          # matches the importer's per-file bound
+MAX_TOTAL = 16 * 1048576
+MODE = 0o644
+# The filename becomes a connection id later, so validate it here rather than
+# trusting whatever the archive happened to contain.
+NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.ovpn$")
 
-if (( dry )); then
-    echo "would add or update $added profile(s); $same already current"
-    echo "(dry run — nothing changed)"
-    exit 0
-fi
-echo "added or updated $added profile(s); $same already current"
-echo "profile directory: $dir ($(ls -1 "$dir"/*.ovpn 2>/dev/null | wc -l) profiles)"
+
+def die(msg):
+    print(f"error: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+if os.path.getsize(bundle) > max_bundle:
+    die("bundle exceeds the download size limit")
+try:
+    zf = zipfile.ZipFile(bundle)
+except zipfile.BadZipFile:
+    die("upstream did not return a zip")
+members = zf.infolist()
+if len(members) > MAX_ENTRIES:
+    die(f"bundle has {len(members)} entries; refusing more than {MAX_ENTRIES}")
+
+# Every read and write below goes through this descriptor, opened without
+# following a link, so no path component can be swapped out from under us.
+try:
+    dfd = os.open(target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+except OSError as e:
+    die(f"cannot open profile directory: {e.strerror}")
+
+
+def read_existing(name):
+    """The current profile, read no-follow, non-blocking and bounded. Returns
+    None for anything that is not a regular file. A copy that is identical but
+    too permissive is tightened in place: older versions extracted with the
+    archive's own 0666."""
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    except OSError:
+        return None, False
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_PROFILE:
+            return None, False
+        chunks, left = [], MAX_PROFILE + 1
+        while left > 0:
+            b = os.read(fd, left)
+            if not b:
+                break
+            chunks.append(b)
+            left -= len(b)
+        return b"".join(chunks), stat.S_IMODE(st.st_mode) != MODE
+    finally:
+        os.close(fd)
+
+
+def tighten(name):
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    try:
+        if stat.S_ISREG(os.fstat(fd).st_mode):
+            os.fchmod(fd, MODE)
+    finally:
+        os.close(fd)
+
+
+def publish(name, data):
+    """Exclusive temp file beside the target, then an atomic rename over it. A
+    symlink or FIFO planted at `name` is replaced, never followed or opened."""
+    for _ in range(16):
+        # Dot-prefixed and not ending in .ovpn: a crash cannot leave a
+        # half-written file that the importer would pick up.
+        tmpname = f".{name}.{secrets.token_hex(6)}.part"
+        try:
+            fd = os.open(tmpname, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         MODE, dir_fd=dfd)
+            break
+        except FileExistsError:
+            continue
+    else:
+        die("could not create a temporary file in the profile directory")
+    try:
+        os.fchmod(fd, MODE)
+        view = memoryview(data)
+        while view:
+            view = view[os.write(fd, view):]
+        os.fsync(fd)
+        os.close(fd)
+        os.replace(tmpname, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+    except BaseException:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(tmpname, dir_fd=dfd)
+        except OSError:
+            pass
+        raise
+
+
+added = same = tightened = 0
+total = 0
+seen = set()
+for m in members:
+    if m.is_dir():
+        continue
+    base = m.filename.rsplit("/", 1)[-1]
+    if not base.endswith(".ovpn"):
+        continue
+    if not NAME_RE.match(base) or base in seen:
+        print(f"  skip (bad or duplicate name): {base!r}")
+        continue
+    seen.add(base)
+    # Bounded read of the decompressed stream: the declared size is the
+    # archive's claim, and a hostile header can understate it.
+    try:
+        with zf.open(m) as fh:
+            data = fh.read(MAX_PROFILE + 1)
+    except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError) as e:
+        print(f"  skip (unreadable): {base} ({e})")
+        continue
+    if len(data) > MAX_PROFILE:
+        print(f"  skip (larger than {MAX_PROFILE} bytes): {base}")
+        continue
+    total += len(data)
+    if total > MAX_TOTAL:
+        die(f"bundle expands past {MAX_TOTAL} bytes; refusing it")
+
+    current, loose = read_existing(base)
+    if current == data:
+        same += 1
+        if loose:
+            tightened += 1
+            if not dry:
+                tighten(base)
+        continue
+    added += 1
+    if not dry:
+        publish(base, data)
+
+if dry:
+    print(f"would add or update {added} profile(s); {same} already current")
+    if tightened:
+        print(f"would tighten {tightened} existing profile(s) to 0644")
+    print("(dry run — nothing changed)")
+    sys.exit(0)
+
+count = sum(1 for e in os.scandir(dfd)
+            if e.name.endswith(".ovpn") and e.is_file(follow_symlinks=False))
+print(f"added or updated {added} profile(s); {same} already current")
+if tightened:
+    print(f"tightened {tightened} existing profile(s) to 0644")
+print(f"profile directory: {target} ({count} profiles)")
+PY

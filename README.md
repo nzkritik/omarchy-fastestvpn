@@ -86,7 +86,7 @@ which the first step installs:
 
 Everything else comes from Arch's `base` metapackage (`coreutils`, `findutils`,
 `util-linux`, `systemd`, `grep`, `sed`, `bash`), from Omarchy's own package list
-(`networkmanager`, `libsecret`, `unzip`), or from something Omarchy already
+(`networkmanager`, `libsecret`), or from something Omarchy already
 depends on (`curl` via `git`, `python` via `uwsm`/`ufw`, `polkit` via
 `quickshell` itself).
 
@@ -183,6 +183,21 @@ The profile directory is user-writable and its path is predictable, so no tool
 is pointed straight at a path inside it. Each profile is copied out through a
 no-follow, non-blocking, byte-bounded read into a private staging directory, and
 `nmcli` only ever sees the staged copy under a name the importer chose.
+
+Every process the plugin starts runs with a closed environment. Tools are named
+by absolute path, `PATH` is pinned to `/usr/bin`, and only the session variables
+the tools need (home, runtime directory, D-Bus and display) are passed through,
+so nothing is resolved through an inherited `PATH`, and hooks such as
+`LD_PRELOAD`, `BASH_ENV` or `PYTHONPATH` never reach a child. The scripts pin
+`PATH` again themselves, so they behave the same when run by hand.
+
+**Refresh profiles** is bounded too. The download is HTTPS-only, redirects
+included, capped at 8 MiB while it transfers, and fails on any HTTP error.
+Extraction ignores the sizes the archive declares: it reads each profile from
+the decompressed stream, up to 256 KiB, and refuses a bundle that expands past
+16 MiB. Each profile is written as `0644` through an exclusive temporary file
+and an atomic rename, so a link or FIFO planted at its name is replaced rather
+than followed. The real bundle is about 300 KB.
 
 ## Attribution
 

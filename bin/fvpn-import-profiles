@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 # ---------------------------------------------------------------------------
 # fvpn-import-profiles — import a directory of .ovpn files into NetworkManager
 #
@@ -33,6 +33,11 @@
 # and nmcli only ever sees the staged copy under a name this script chose.
 # ---------------------------------------------------------------------------
 set -uo pipefail
+
+# A closed, fixed toolchain: every command below resolves from /usr/bin,
+# whatever PATH the caller arrived with.
+PATH=/usr/bin
+export PATH
 
 MAX_BYTES=262144   # a profile is ~4KB; this bounds a swollen or endless file
 NM_ACTION=org.freedesktop.NetworkManager.settings.modify.system

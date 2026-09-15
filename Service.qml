@@ -130,6 +130,26 @@ Item {
     var u = String(Qt.resolvedUrl("."))
     return u.indexOf("file://") === 0 ? u.substring(7) : u
   }
+
+  // ── Child environment ─────────────────────────────────────────────────────
+  // Every process this plugin starts gets a closed environment: PATH pinned to
+  // /usr/bin, and only the session variables the tools genuinely need passed
+  // through (under clearEnvironment, null means "the session's value"). Every
+  // tool is also named by absolute path, so nothing is resolved through the
+  // PATH the shell happened to inherit, and loader or interpreter hooks such
+  // as LD_PRELOAD, BASH_ENV or PYTHONPATH never reach a child.
+  function childEnv(extra) {
+    var e = ({
+      PATH: "/usr/bin",
+      HOME: null, USER: null, LOGNAME: null, LANG: null,
+      XDG_RUNTIME_DIR: null, XDG_DATA_HOME: null, XDG_STATE_HOME: null,
+      DBUS_SESSION_BUS_ADDRESS: null, WAYLAND_DISPLAY: null,
+      DISPLAY: null, XAUTHORITY: null
+    })
+    if (extra) for (var k in extra) e[k] = extra[k]
+    return e
+  }
+
   readonly property string connectBin: pluginDir + "bin/fvpn-connect"
   readonly property string dataFile: pluginDir + "data/locations.json"
 
@@ -155,8 +175,10 @@ Item {
   // planted at this predictable path would otherwise redirect or block it.
   Process {
     id: loadProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
-    command: ["dd", "if=" + root.dataFile, "iflag=nofollow,nonblock",
+    command: ["/usr/bin/dd", "if=" + root.dataFile, "iflag=nofollow,nonblock",
               "bs=65536", "count=16"]
     stdout: StdioCollector {
       onStreamFinished: {
@@ -224,8 +246,10 @@ Item {
 
   Process {
     id: stateLoadProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
-    command: ["dd", "if=" + root.stateFile, "iflag=nofollow,nonblock",
+    command: ["/usr/bin/dd", "if=" + root.stateFile, "iflag=nofollow,nonblock",
               "bs=65536", "count=8"]
     stdout: StdioCollector {
       onStreamFinished: {
@@ -270,7 +294,7 @@ Item {
     var next = ({})
     for (var k in endpointState) if (k !== id) next[k] = endpointState[k]
     root.endpointState = next
-    clearProcess.command = ["python3", "-c",
+    clearProcess.command = ["/usr/bin/python3", "-I", "-c",
       "import json,os,sys,tempfile\n" +
       "p=sys.argv[1]; i=sys.argv[2]\n" +
       "try:\n" +
@@ -290,12 +314,18 @@ Item {
     clearProcess.running = true
   }
 
-  Process { id: clearProcess; running: false; command: [] }
+  Process {
+    id: clearProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
+    running: false
+    command: []
+  }
 
   // ── Installed connections ─────────────────────────────────────────────────
   // The catalogue can list endpoints that upstream offers but this machine has
-  // not imported (importing needs root). Those must not be selectable, or a
-  // click just fails with "no such connection".
+  // not imported. Those must not be selectable, or a click just fails with
+  // "no such connection".
   property var installedIds: ({})     // locations with a UDP connection
   property var tcpIds: ({})           // locations with a TCP connection
   property int installedCount: 0
@@ -390,8 +420,10 @@ Item {
 
   Process {
     id: geoLoadProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
-    command: ["dd", "if=" + root.geoFile, "iflag=nofollow,nonblock",
+    command: ["/usr/bin/dd", "if=" + root.geoFile, "iflag=nofollow,nonblock",
               "bs=65536", "count=16"]
     stdout: StdioCollector {
       onStreamFinished: {
@@ -440,6 +472,8 @@ Item {
   // it spends no authentication against the account.
   Process {
     id: geoProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     stdout: SplitParser {
@@ -467,7 +501,7 @@ Item {
     root.lastError = ""
     root.updating = true
     root.updateStatus = "Locating endpoints…"
-    var cmd = [root.geoBin, "--dir", root.profileDir]
+    var cmd = ["/usr/bin/python3", "-I", root.geoBin, "--dir", root.profileDir]
     if (all === true) cmd.push("--all")
     geoProcess.command = cmd
     geoProcess.running = true
@@ -500,8 +534,10 @@ Item {
 
   Process {
     id: installedProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
-    command: ["nmcli", "--terse", "--fields", "NAME", "connection", "show"]
+    command: ["/usr/bin/nmcli", "--terse", "--fields", "NAME", "connection", "show"]
     stdout: StdioCollector {
       onStreamFinished: {
         var names = String(text).split("\n")
@@ -532,8 +568,10 @@ Item {
   // ── Status refresh ────────────────────────────────────────────────────────
   Process {
     id: statusProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
-    command: ["nmcli", "--terse", "--fields", "NAME,TYPE,STATE",
+    command: ["/usr/bin/nmcli", "--terse", "--fields", "NAME,TYPE,STATE",
               "connection", "show", "--active"]
     stdout: StdioCollector {
       onStreamFinished: {
@@ -556,7 +594,7 @@ Item {
         if (foundId === "") {
           root.activeState = ""
         } else {
-          stateProcess.command = ["nmcli", "-g", "GENERAL.STATE",
+          stateProcess.command = ["/usr/bin/nmcli", "-g", "GENERAL.STATE",
                                   "connection", "show", activeConn]
           stateProcess.running = true
         }
@@ -566,6 +604,8 @@ Item {
 
   Process {
     id: stateProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     stdout: StdioCollector {
@@ -581,6 +621,8 @@ Item {
   // ── Actions ───────────────────────────────────────────────────────────────
   Process {
     id: actionProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     property string label: ""
@@ -616,9 +658,9 @@ Item {
     actionProcess.label = "Connect"
     // The configured account overrides whatever the connection was imported
     // with, so changing it in settings does not mean reimporting everything.
-    actionProcess.environment = root.account !== ""
-      ? ({ "FVPN_ACCOUNT": root.account }) : ({})
-    actionProcess.command = [root.connectBin, root.connectionFor(loc.id)]
+    actionProcess.environment = root.childEnv(root.account !== ""
+      ? ({ "FVPN_ACCOUNT": root.account }) : null)
+    actionProcess.command = ["/usr/bin/bash", root.connectBin, root.connectionFor(loc.id)]
     actionProcess.running = true
   }
 
@@ -628,7 +670,7 @@ Item {
     root.actionStatus = "Disconnecting…"
     root.busy = true
     actionProcess.label = "Disconnect"
-    actionProcess.command = [root.connectBin, "--down"]
+    actionProcess.command = ["/usr/bin/bash", root.connectBin, "--down"]
     actionProcess.running = true
   }
 
@@ -643,6 +685,8 @@ Item {
   // waste.
   Process {
     id: countProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     stdout: StdioCollector {
@@ -655,7 +699,7 @@ Item {
     if (countProcess.running || profileDir === "") return
     // -maxdepth 1 -type f excludes symlinks and subdirectories, matching
     // exactly what the importer will agree to read.
-    countProcess.command = ["sh", "-c",
+    countProcess.command = ["/usr/bin/sh", "-c",
       "find \"$1\" -maxdepth 1 -type f -name '*.ovpn' 2>/dev/null | wc -l",
       "sh", profileDir]
     countProcess.running = true
@@ -664,6 +708,8 @@ Item {
   // \u2500\u2500 Credential status \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   Process {
     id: credStatusProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     onExited: function (code) { root.credentialPresent = (code === 0) }
@@ -674,8 +720,8 @@ Item {
       if (account === "") root.credentialPresent = false
       return
     }
-    credStatusProcess.environment = ({ "FVPN_ACCOUNT": root.account })
-    credStatusProcess.command = [root.credsBin, "status"]
+    credStatusProcess.environment = root.childEnv({ "FVPN_ACCOUNT": root.account })
+    credStatusProcess.command = ["/usr/bin/bash", root.credsBin, "status"]
     credStatusProcess.running = true
   }
 
@@ -683,6 +729,8 @@ Item {
   // in a QML property, never placed in argv, and never written to disk.
   Process {
     id: credStoreProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     stdinEnabled: true
@@ -697,19 +745,21 @@ Item {
     if (updating || account === "" || !password) return
     root.updating = true
     root.updateStatus = "Saving password\u2026"
-    credStoreProcess.environment = ({ "FVPN_ACCOUNT": root.account })
-    credStoreProcess.command = [root.credsBin, "store", "--stdin"]
+    credStoreProcess.environment = root.childEnv({ "FVPN_ACCOUNT": root.account })
+    credStoreProcess.command = ["/usr/bin/bash", root.credsBin, "store", "--stdin"]
     credStoreProcess.running = true
     credStoreProcess.write(password + "\n")
     credStoreProcess.stdinEnabled = false   // EOF, so the script stops reading
   }
 
   // \u2500\u2500 Fetching and importing profiles \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  // Two separate steps on purpose. Fetching is unprivileged and just fills a
-  // directory; importing needs root, so it is the only thing that ever raises
-  // a polkit prompt. Neither one connects to anything.
+  // Two separate steps on purpose. Fetching just fills a directory; importing
+  // hands those files to NetworkManager. Both run unprivileged, and neither
+  // one connects to anything.
   Process {
     id: fetchProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     stderr: StdioCollector {
@@ -730,12 +780,14 @@ Item {
     root.lastError = ""
     root.updating = true
     root.updateStatus = "Downloading profiles\u2026"
-    fetchProcess.command = [root.fetchBin, "--dir", root.profileDir]
+    fetchProcess.command = ["/usr/bin/bash", root.fetchBin, "--dir", root.profileDir]
     fetchProcess.running = true
   }
 
   Process {
     id: importProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     stderr: StdioCollector {
@@ -766,7 +818,7 @@ Item {
     // the import runs as us. Nothing here executes plugin code as root — which
     // it must not, since this directory is user-writable and its contents can
     // change between the moment a prompt is answered and the moment root runs.
-    importProcess.command = ["bash", root.importBin,
+    importProcess.command = ["/usr/bin/bash", root.importBin,
                              "--dir", root.profileDir,
                              "--account", root.account]
     importProcess.running = true
@@ -777,6 +829,8 @@ Item {
   // rather than interpolated into a shell string.
   Process {
     id: addProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
     command: []
     onExited: function (code) {
@@ -790,13 +844,13 @@ Item {
     if (updating || profileDir === "" || !paths || paths.length === 0) return
     root.updating = true
     root.updateStatus = "Adding profiles\u2026"
-    var cmd = ["cp", "-n", "--no-dereference", "--preserve=mode"]
+    var cmd = ["/usr/bin/cp", "-n", "--no-dereference"]
     for (var i = 0; i < paths.length; i++) {
       // Only accept plain absolute paths ending in .ovpn. The picker is
       // trusted, but this is the boundary where a path becomes an argument.
       if (/^\/[^\0]*\.ovpn$/.test(paths[i])) cmd.push(paths[i])
     }
-    if (cmd.length === 4) { root.updating = false; root.updateStatus = "No .ovpn files chosen"; return }
+    if (cmd.length === 3) { root.updating = false; root.updateStatus = "No .ovpn files chosen"; return }
     cmd.push(root.profileDir)
     addProcess.command = cmd
     addProcess.running = true
@@ -806,8 +860,10 @@ Item {
   // and a Qt modal parented to it does not reliably take keyboard focus.
   Process {
     id: browseProcess
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: false
-    command: ["zenity", "--file-selection", "--multiple", "--separator=\n",
+    command: ["/usr/bin/zenity", "--file-selection", "--multiple", "--separator=\n",
               "--title=Add OpenVPN profiles", "--file-filter=OpenVPN profiles | *.ovpn"]
     stdout: StdioCollector {
       onStreamFinished: {
@@ -830,8 +886,10 @@ Item {
   property bool hasPicker: false
   Process {
     id: pickerCheck
+    clearEnvironment: true
+    environment: root.childEnv(null)
     running: true
-    command: ["sh", "-c", "command -v zenity >/dev/null 2>&1"]
+    command: ["/usr/bin/test", "-x", "/usr/bin/zenity"]
     onExited: function (code) { root.hasPicker = (code === 0) }
   }
 
@@ -841,7 +899,9 @@ Item {
   // waiting for the poll. The poll below is only a safety net.
   Process {
     id: monitorProcess
-    command: ["nmcli", "monitor"]
+    clearEnvironment: true
+    environment: root.childEnv(null)
+    command: ["/usr/bin/nmcli", "monitor"]
     running: true
     stdout: SplitParser {
       onRead: debounce.restart()

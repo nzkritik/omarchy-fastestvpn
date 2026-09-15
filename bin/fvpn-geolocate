@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3 -I
 """fvpn-geolocate — build the endpoint location table from server IPs.
 
     fvpn-geolocate [--dir DIR] [--table FILE] [--all] [--delay S] [--limit N]

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 # ---------------------------------------------------------------------------
 # fvpn-creds — manage the FastestVPN password in the desktop keyring
 #
@@ -15,6 +15,11 @@
 # the interactive `read -rs` below can never run there.
 # ---------------------------------------------------------------------------
 set -euo pipefail
+
+# A closed, fixed toolchain: every command below resolves from /usr/bin,
+# whatever PATH the caller arrived with.
+PATH=/usr/bin
+export PATH
 
 SERVICE=fastestvpn
 
