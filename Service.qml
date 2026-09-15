@@ -780,7 +780,7 @@ Item {
     root.lastError = ""
     root.updating = true
     root.updateStatus = "Downloading profiles\u2026"
-    fetchProcess.command = ["/usr/bin/bash", root.fetchBin, "--dir", root.profileDir]
+    fetchProcess.command = ["/usr/bin/python3", "-I", root.fetchBin, "--dir", root.profileDir]
     fetchProcess.running = true
   }
 

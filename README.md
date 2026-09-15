@@ -87,7 +87,7 @@ which the first step installs:
 Everything else comes from Arch's `base` metapackage (`coreutils`, `findutils`,
 `util-linux`, `systemd`, `grep`, `sed`, `bash`), from Omarchy's own package list
 (`networkmanager`, `libsecret`), or from something Omarchy already
-depends on (`curl` via `git`, `python` via `uwsm`/`ufw`, `polkit` via
+depends on (`python` via `uwsm`/`ufw`, `polkit` via
 `quickshell` itself).
 
 `zenity` is optional. It provides the **Add profiles…** file picker, and the
@@ -191,11 +191,14 @@ so nothing is resolved through an inherited `PATH`, and hooks such as
 `LD_PRELOAD`, `BASH_ENV` or `PYTHONPATH` never reach a child. The scripts pin
 `PATH` again themselves, so they behave the same when run by hand.
 
-**Refresh profiles** is bounded too. The download is HTTPS-only, redirects
-included, capped at 8 MiB while it transfers, and fails on any HTTP error.
-Extraction ignores the sizes the archive declares: it reads each profile from
-the decompressed stream, up to 256 KiB, and refuses a bundle that expands past
-16 MiB. Each profile is written as `0644` through an exclusive temporary file
+**Refresh profiles** only ever handles the bundle as data, and within bounds.
+One Python program downloads it into memory and parses it as a zip. It is never
+written to disk as a download or handed to another program, and only the
+`.ovpn` text it contains leaves. The request is HTTPS-only (redirects included),
+verifies the certificate, follows at most 3 redirects, stops at 8 MiB and gives
+up after 90 s. Extraction ignores the sizes the archive declares: it reads each
+profile from the decompressed stream, up to 256 KiB, and refuses a bundle that
+expands past 16 MiB. Each profile is written as `0644` through an exclusive temporary file
 and an atomic rename, so a link or FIFO planted at its name is replaced rather
 than followed. The real bundle is about 300 KB.
 

@@ -1,73 +1,46 @@
-#!/usr/bin/bash
-# ---------------------------------------------------------------------------
-# fvpn-fetch-profiles — fill the profile directory from FastestVPN's bundle
-#
-#   fvpn-fetch-profiles [--dir DIR] [--dry-run]
-#
-# Runs unprivileged, as the user, into a user-owned directory. The bundle is
-# the vendor's published OpenVPN archive; it is served directly, with no HTML
-# page in front of it.
-#
-# This replaces the old download-inside-the-root-importer arrangement: the
-# importer now only ever reads the directory, so fetching needs no privilege
-# and the user can equally well drop their own .ovpn files in by hand.
-#
-# BOUNDED. The download is HTTPS-only (redirects included), capped in size
-# while it transfers, and rejected on any HTTP error. Extraction never trusts
-# the sizes the archive declares: each member is read from the decompressed
-# stream with a byte bound, and the total is capped, so a hostile or corrupt
-# archive cannot expand without limit. The real bundle is ~300 KB holding 134
-# profiles of ~3 KB each; every limit below sits far above that.
-# ---------------------------------------------------------------------------
-set -euo pipefail
+#!/usr/bin/python3 -I
+"""fvpn-fetch-profiles — fill the profile directory from FastestVPN's bundle.
 
-# A closed, fixed toolchain: every command below resolves from /usr/bin,
-# whatever PATH the caller arrived with.
-PATH=/usr/bin
-export PATH
+    fvpn-fetch-profiles [--dir DIR] [--dry-run]
 
-BUNDLE_URL="https://support.fastestvpn.com/download/fastestvpn_ovpn/"
-DEFAULT_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/fastestvpn/profiles"
-MAX_BUNDLE=8388608     # 8 MiB download cap
+Runs unprivileged, as the user, into a user-owned directory. The bundle is the
+vendor's published OpenVPN archive; it is served directly, with no HTML page in
+front of it.
 
-die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+This replaces the old download-inside-the-root-importer arrangement: the
+importer now only ever reads the directory, so fetching needs no privilege and
+the user can equally well drop their own .ovpn files in by hand.
 
-dir="$DEFAULT_DIR"
-dry=0
-while (( $# )); do
-    case "$1" in
-        --dir) dir="${2:-}"; shift 2 || die "--dir needs a path" ;;
-        --dry-run) dry=1; shift ;;
-        *) echo "usage: $0 [--dir DIR] [--dry-run]" >&2; exit 2 ;;
-    esac
-done
-[[ -n "$dir" ]] || die "empty profile directory"
+DATA ONLY. The download is held in memory and parsed here as a zip. It never
+touches the filesystem and is never handed to another program; the only thing
+that leaves this process is .ovpn text written into the profile directory.
 
-command -v curl    >/dev/null || die "curl required"
-command -v python3 >/dev/null || die "python3 required"
+BOUNDED. The request is HTTPS-only, redirects included, with certificate
+verification, at most 3 redirects, an 8 MiB cap enforced while reading, and a
+90 s deadline. Extraction never trusts the sizes the archive declares: each
+member is read from the decompressed stream with a byte bound, and the total is
+capped, so a hostile or corrupt archive cannot expand without limit. The real
+bundle is ~300 KB holding 134 profiles of ~3 KB each; every limit sits far above
+that.
+"""
 
-# Refuse a symlinked destination: this path comes from user settings and is
-# written to, so a link planted here would redirect the whole extraction. The
-# extractor below re-checks by opening it O_NOFOLLOW and works only through
-# that descriptor, so a swap after this test gains nothing either.
-[[ ! -L "$dir" ]] || die "profile directory is a symlink: $dir"
-mkdir -p "$dir"
-[[ -d "$dir" && ! -L "$dir" ]] || die "not a directory: $dir"
+import argparse
+import io
+import os
+import re
+import secrets
+import ssl
+import stat
+import sys
+import time
+import urllib.error
+import urllib.request
+import zipfile
 
-tmp="$(mktemp -d)"
-trap 'rm -rf -- "$tmp"' EXIT
-
-echo "downloading bundle…"
-curl --silent --show-error --location --fail \
-     --proto '=https' --proto-redir '=https' --max-redirs 3 \
-     --max-filesize "$MAX_BUNDLE" --max-time 90 -A 'Mozilla/5.0' \
-     "$BUNDLE_URL" -o "$tmp/bundle.zip" \
-  || die "download failed"
-
-python3 -I - "$tmp/bundle.zip" "$dir" "$dry" "$MAX_BUNDLE" <<'PY'
-import os, re, secrets, stat, sys, zipfile
-
-bundle, target, dry, max_bundle = sys.argv[1], sys.argv[2], sys.argv[3] == "1", int(sys.argv[4])
+BUNDLE_URL = "https://support.fastestvpn.com/download/fastestvpn_ovpn/"
+MAX_BUNDLE = 8 * 1048576
+MAX_REDIRECTS = 3
+DEADLINE_SECS = 90
 MAX_ENTRIES = 1000
 MAX_PROFILE = 262144          # matches the importer's per-file bound
 MAX_TOTAL = 16 * 1048576
@@ -82,28 +55,61 @@ def die(msg):
     sys.exit(1)
 
 
-if os.path.getsize(bundle) > max_bundle:
-    die("bundle exceeds the download size limit")
-try:
-    zf = zipfile.ZipFile(bundle)
-except zipfile.BadZipFile:
-    die("upstream did not return a zip")
-members = zf.infolist()
-if len(members) > MAX_ENTRIES:
-    die(f"bundle has {len(members)} entries; refusing more than {MAX_ENTRIES}")
+def default_dir():
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "fastestvpn", "profiles")
 
-# Every read and write below goes through this descriptor, opened without
+
+# ── Download ─────────────────────────────────────────────────────────────────
+class HttpsOnlyRedirects(urllib.request.HTTPRedirectHandler):
+    """Follow at most MAX_REDIRECTS, and only to https:// (urllib has already
+    resolved a relative Location against the request by the time this runs)."""
+    max_redirections = MAX_REDIRECTS
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not newurl.lower().startswith("https://"):
+            raise urllib.error.URLError(f"refusing a redirect to non-HTTPS {newurl}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def download():
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=ssl.create_default_context()),
+        HttpsOnlyRedirects)
+    req = urllib.request.Request(BUNDLE_URL, headers={"User-Agent": "Mozilla/5.0"})
+    deadline = time.monotonic() + DEADLINE_SECS
+    try:
+        with opener.open(req, timeout=30) as resp:
+            if not resp.geturl().lower().startswith("https://"):
+                die("download ended on a non-HTTPS URL")
+            declared = resp.headers.get("Content-Length", "")
+            if declared.isdigit() and int(declared) > MAX_BUNDLE:
+                die(f"bundle is {declared} bytes; refusing more than {MAX_BUNDLE}")
+            buf = bytearray()
+            while True:
+                if time.monotonic() > deadline:
+                    die(f"download took longer than {DEADLINE_SECS}s")
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                buf += chunk
+                if len(buf) > MAX_BUNDLE:
+                    die(f"bundle exceeds {MAX_BUNDLE} bytes; refusing it")
+            return bytes(buf)
+    except urllib.error.HTTPError as e:
+        die(f"download failed: HTTP {e.code}")
+    except (urllib.error.URLError, OSError) as e:
+        die(f"download failed: {getattr(e, 'reason', e)}")
+
+
+# ── Profile directory ────────────────────────────────────────────────────────
+# Every read and write goes through a directory descriptor opened without
 # following a link, so no path component can be swapped out from under us.
-try:
-    dfd = os.open(target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-except OSError as e:
-    die(f"cannot open profile directory: {e.strerror}")
-
-
-def read_existing(name):
+def read_existing(dfd, name):
     """The current profile, read no-follow, non-blocking and bounded. Returns
-    None for anything that is not a regular file. A copy that is identical but
-    too permissive is tightened in place: older versions extracted with the
+    (None, False) for anything that is not a regular file. The flag says an
+    identical copy is too permissive: older versions extracted with the
     archive's own 0666."""
     try:
         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
@@ -125,7 +131,7 @@ def read_existing(name):
         os.close(fd)
 
 
-def tighten(name):
+def tighten(dfd, name):
     fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
     try:
         if stat.S_ISREG(os.fstat(fd).st_mode):
@@ -134,7 +140,7 @@ def tighten(name):
         os.close(fd)
 
 
-def publish(name, data):
+def publish(dfd, name, data):
     """Exclusive temp file beside the target, then an atomic rename over it. A
     symlink or FIFO planted at `name` is replaced, never followed or opened."""
     for _ in range(16):
@@ -169,57 +175,99 @@ def publish(name, data):
         raise
 
 
-added = same = tightened = 0
-total = 0
-seen = set()
-for m in members:
-    if m.is_dir():
-        continue
-    base = m.filename.rsplit("/", 1)[-1]
-    if not base.endswith(".ovpn"):
-        continue
-    if not NAME_RE.match(base) or base in seen:
-        print(f"  skip (bad or duplicate name): {base!r}")
-        continue
-    seen.add(base)
-    # Bounded read of the decompressed stream: the declared size is the
-    # archive's claim, and a hostile header can understate it.
+# ── Extraction ───────────────────────────────────────────────────────────────
+def extract(bundle, dfd, dry):
+    """Install every acceptable .ovpn from the in-memory zip `bundle`. Returns
+    (added, same, tightened)."""
     try:
-        with zf.open(m) as fh:
-            data = fh.read(MAX_PROFILE + 1)
-    except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError) as e:
-        print(f"  skip (unreadable): {base} ({e})")
-        continue
-    if len(data) > MAX_PROFILE:
-        print(f"  skip (larger than {MAX_PROFILE} bytes): {base}")
-        continue
-    total += len(data)
-    if total > MAX_TOTAL:
-        die(f"bundle expands past {MAX_TOTAL} bytes; refusing it")
+        zf = zipfile.ZipFile(io.BytesIO(bundle))
+    except zipfile.BadZipFile:
+        die("upstream did not return a zip")
+    members = zf.infolist()
+    if len(members) > MAX_ENTRIES:
+        die(f"bundle has {len(members)} entries; refusing more than {MAX_ENTRIES}")
 
-    current, loose = read_existing(base)
-    if current == data:
-        same += 1
-        if loose:
-            tightened += 1
-            if not dry:
-                tighten(base)
-        continue
-    added += 1
-    if not dry:
-        publish(base, data)
+    added = same = tightened = 0
+    total = 0
+    seen = set()
+    for m in members:
+        if m.is_dir():
+            continue
+        base = m.filename.rsplit("/", 1)[-1]
+        if not base.endswith(".ovpn"):
+            continue
+        if not NAME_RE.match(base) or base in seen:
+            print(f"  skip (bad or duplicate name): {base!r}")
+            continue
+        seen.add(base)
+        # Bounded read of the decompressed stream: the declared size is the
+        # archive's claim, and a hostile header can understate it.
+        try:
+            with zf.open(m) as fh:
+                data = fh.read(MAX_PROFILE + 1)
+        except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError) as e:
+            print(f"  skip (unreadable): {base} ({e})")
+            continue
+        if len(data) > MAX_PROFILE:
+            print(f"  skip (larger than {MAX_PROFILE} bytes): {base}")
+            continue
+        total += len(data)
+        if total > MAX_TOTAL:
+            die(f"bundle expands past {MAX_TOTAL} bytes; refusing it")
 
-if dry:
-    print(f"would add or update {added} profile(s); {same} already current")
+        current, loose = read_existing(dfd, base)
+        if current == data:
+            same += 1
+            if loose:
+                tightened += 1
+                if not dry:
+                    tighten(dfd, base)
+            continue
+        added += 1
+        if not dry:
+            publish(dfd, base, data)
+    return added, same, tightened
+
+
+def open_target(target):
+    # Refuse a symlinked destination: this path comes from user settings and is
+    # written to, so a link planted here would redirect the whole extraction.
+    if os.path.islink(target):
+        die(f"profile directory is a symlink: {target}")
+    os.makedirs(target, exist_ok=True)
+    try:
+        return os.open(target, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        die(f"cannot open profile directory {target}: {e.strerror}")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Fill the profile directory from FastestVPN's bundle.")
+    ap.add_argument("--dir", default=default_dir(), help="profile directory")
+    ap.add_argument("--dry-run", action="store_true", help="report what would change")
+    args = ap.parse_args()
+    if not args.dir:
+        die("empty profile directory")
+    if os.geteuid() == 0:
+        die("do not run this as root; it is meant to run as your own user")
+
+    dfd = open_target(args.dir)
+    print("downloading bundle…", flush=True)
+    added, same, tightened = extract(download(), dfd, args.dry_run)
+
+    if args.dry_run:
+        print(f"would add or update {added} profile(s); {same} already current")
+        if tightened:
+            print(f"would tighten {tightened} existing profile(s) to 0644")
+        print("(dry run — nothing changed)")
+        return
+    count = sum(1 for e in os.scandir(dfd)
+                if e.name.endswith(".ovpn") and e.is_file(follow_symlinks=False))
+    print(f"added or updated {added} profile(s); {same} already current")
     if tightened:
-        print(f"would tighten {tightened} existing profile(s) to 0644")
-    print("(dry run — nothing changed)")
-    sys.exit(0)
+        print(f"tightened {tightened} existing profile(s) to 0644")
+    print(f"profile directory: {args.dir} ({count} profiles)")
 
-count = sum(1 for e in os.scandir(dfd)
-            if e.name.endswith(".ovpn") and e.is_file(follow_symlinks=False))
-print(f"added or updated {added} profile(s); {same} already current")
-if tightened:
-    print(f"tightened {tightened} existing profile(s) to 0644")
-print(f"profile directory: {target} ({count} profiles)")
-PY
+
+if __name__ == "__main__":
+    main()
