@@ -130,6 +130,7 @@ BarWidget {
           }
 
           Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             text: root.shortLabel
             color: root.stateColor

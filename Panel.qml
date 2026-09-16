@@ -195,6 +195,7 @@ Panel {
         spacing: Style.space(8)
 
         Text {
+          textFormat: Text.PlainText
           text: "FastestVPN"
           color: root.foreground
           font.family: root.fontFamily
@@ -211,6 +212,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           visible: text !== "" && !root.configOpen && !root.firstRun
           text: root.service ? (root.service.importedCount + " locations") : ""
           color: root.dim
@@ -273,6 +275,7 @@ Panel {
           Layout.fillWidth: true
           spacing: 0
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             text: root.service && root.service.connected && root.activeLoc
                   ? root.activeLoc.label : "Not connected"
@@ -283,6 +286,7 @@ Panel {
             elide: Text.ElideRight
           }
           Text {
+            textFormat: Text.PlainText
             Layout.fillWidth: true
             visible: text !== ""
             text: {
@@ -382,6 +386,7 @@ Panel {
             border.color: Util.alpha(root.accent, 0.65)
             opacity: count > 0 ? 1 : 0.4
             Text {
+              textFormat: Text.PlainText
               id: tText
               anchors.centerIn: parent
               text: parent.modelData.toUpperCase() + "  " + parent.count
@@ -410,6 +415,7 @@ Panel {
           border.width: root.showUnavailable ? 1 : 0
           border.color: Util.alpha(root.urgent, 0.65)
           Text {
+            textFormat: Text.PlainText
             id: unavailText
             anchors.centerIn: parent
             text: {
@@ -507,6 +513,7 @@ Panel {
               Layout.fillWidth: true
               spacing: 0
               Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 text: row.modelData.label
                 color: row.unavailable ? root.dim : root.foreground
@@ -515,6 +522,7 @@ Panel {
                 elide: Text.ElideRight
               }
               Text {
+                textFormat: Text.PlainText
                 Layout.fillWidth: true
                 visible: text !== ""
                 text: {
@@ -544,6 +552,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               // Give way to the action button rather than crowding it.
               visible: text !== "" && !actionButton.visible
               text: {
@@ -589,6 +598,7 @@ Panel {
               }
 
               Text {
+                textFormat: Text.PlainText
                 id: actionText
                 anchors.centerIn: parent
                 text: actionButton.isDisconnect ? "Disconnect"
@@ -603,6 +613,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         Layout.fillWidth: true
         visible: !root.configOpen && text !== ""
         text: {
@@ -619,6 +630,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         Layout.fillWidth: true
         visible: !root.configOpen && root.service && root.service.loadError !== ""
         text: root.service ? root.service.loadError : ""
@@ -641,6 +653,7 @@ Panel {
         Item { Layout.fillHeight: true }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           horizontalAlignment: Text.AlignHCenter
           text: "No locations yet"
@@ -651,6 +664,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           horizontalAlignment: Text.AlignHCenter
           wrapMode: Text.WordWrap

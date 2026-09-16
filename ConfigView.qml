@@ -28,6 +28,9 @@ ColumnLayout {
   spacing: Style.space(12)
 
   component FieldLabel: Text {
+    // Several of these carry service and child-process strings, and Text
+    // defaults to AutoText, which would interpret markup in them.
+    textFormat: Text.PlainText
     color: cfg.dim
     font.family: cfg.fontFamily
     font.pixelSize: Style.space(10)
@@ -40,6 +43,7 @@ ColumnLayout {
     spacing: Style.space(8)
 
     Text {
+      textFormat: Text.PlainText
       text: "Settings"
       color: cfg.foreground
       font.family: cfg.fontFamily
@@ -370,6 +374,7 @@ ColumnLayout {
 
   // ── Footer status ─────────────────────────────────────────────────────────
   Text {
+    textFormat: Text.PlainText
     Layout.fillWidth: true
     visible: text !== ""
     text: {

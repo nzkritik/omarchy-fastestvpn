@@ -12,9 +12,10 @@
 # org.freedesktop.NetworkManager.settings.modify.system to a local user in the
 # wheel group with no prompt. So the whole import runs as you.
 #
-# That is not merely safer, it is the only arrangement that can work from the
-# panel: omarchy-shell is a long-lived process with no TTY, and Omarchy ships no
-# polkit authentication agent, so an escalation prompt could never be answered.
+# That is not merely safer, it is the arrangement that works unattended from the
+# panel: omarchy-shell is a long-lived process with no TTY. Omarchy 4.0.3 does
+# register a polkit agent, so a prompt could now be answered — but this script
+# never asks for one.
 #
 # It also removes the reason the old version needed root at all. Imported as the
 # user, NetworkManager extracts the inline <ca>/<tls-auth> blobs to
@@ -66,9 +67,9 @@ command -v nmcli >/dev/null || die "nmcli not found"
 me="$(id -un)" || die "cannot determine the current user"
 
 # Say up front when the polkit rule does not apply — a non-wheel or remote
-# session gets auth_admin_keep instead, and with no agent installed there is
-# nothing to answer it. Advisory only: nmcli remains the authority, so a system
-# that *does* run an agent can still authenticate normally.
+# session gets auth_admin_keep instead, which means a prompt, and this script
+# has no way to answer one. Advisory only: nmcli remains the authority, so a
+# session whose agent can answer it still authenticates normally.
 if command -v pkcheck >/dev/null 2>&1; then
     if ! pkcheck --action-id "$NM_ACTION" --process $$ >/dev/null 2>&1; then
         echo "note: this session is not pre-authorised to add system connections." >&2

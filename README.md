@@ -188,11 +188,12 @@ you. Check your own session with:
 
     pkcheck --action-id org.freedesktop.NetworkManager.settings.modify.system --process $$
 
-That is also the only arrangement that can work from the panel: `omarchy-shell`
-is a long-lived process with no TTY and Omarchy ships no polkit authentication
-agent, so there is no dialog an escalation prompt could ever be answered in. If
-the rule does not cover your session the import says so and explains what is
-missing, rather than reaching for privilege.
+That is also the arrangement that works unattended from the panel:
+`omarchy-shell` is a long-lived process with no TTY. Omarchy 4.0.3 does now
+register a polkit agent of its own, so a prompt could be answered — but an
+import that needs no prompt is the better shape, and this plugin never asks for
+one. If the rule does not cover your session the import says so and explains
+what is missing, rather than reaching for privilege.
 
 Because the import runs as you, NetworkManager extracts each profile's inline
 `<ca>`/`<tls-auth>` blob to
