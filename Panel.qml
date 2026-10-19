@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // `Panel` owns only the open/close state. The visible surface is the
@@ -40,9 +41,9 @@ Panel {
     host.updateEntryInline(root.moduleName, next)
   }
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
-  readonly property color accent: Color.accent
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
+  readonly property color accent: Commons.Color.accent
   readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -254,7 +255,7 @@ Panel {
           Rectangle {
             anchors.centerIn: parent
             width: Style.space(8); height: width; radius: width / 2
-            color: root.bar ? root.bar.background : Color.background
+            color: root.bar ? root.bar.background : Commons.Color.background
           }
         }
       }

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 // The plugin's settings screen, shown in place of the location list.
@@ -15,9 +16,9 @@ ColumnLayout {
   id: cfg
 
   property var service: null
-  property color foreground: Color.foreground
-  property color urgent: Color.urgent
-  property color accent: Color.accent
+  property color foreground: Commons.Color.foreground
+  property color urgent: Commons.Color.urgent
+  property color accent: Commons.Color.accent
   property color dim: Qt.darker(foreground, 1.5)
   property string fontFamily: Style.font.family
 

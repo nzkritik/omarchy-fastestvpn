@@ -3,6 +3,7 @@ import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 
 // Public-domain Natural Earth 1:110m land, simplified and projected equirectangular.
 //
@@ -15,8 +16,8 @@ Item {
   property var locations: []
   property var selectedPoint: null
   property var connectedPoint: null
-  property color foreground: Color.foreground
-  property color accent: Color.accent
+  property color foreground: Commons.Color.foreground
+  property color accent: Commons.Color.accent
 
   // Entry node of a double-hop profile, when the active one has a distinct
   // entry. Guarded on both ends being finite and NOT the same point: a profile
