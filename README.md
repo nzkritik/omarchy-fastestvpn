@@ -164,6 +164,12 @@ endpoint to find out where it is. One lookup is made per unique IP rather than
 per file, so 134 profiles cost about 64 of the API's 1000 free daily calls, and
 it only looks up what it does not already know.
 
+It is bounded so a misbehaving API cannot hold it: redirects are refused, each
+answer is capped at 64 KiB and 20 seconds, no lookup starts after five minutes
+(`--deadline`, and anything located by then is kept), and the process is
+limited to 1 GiB. The plugin kills it if it is still running a minute after
+the deadline.
+
 ## Tools
 
     bin/fvpn-geolocate          # locate endpoints not located yet (--all for every one)

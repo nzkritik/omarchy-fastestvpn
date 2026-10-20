@@ -2,7 +2,7 @@
 """fvpn-geolocate — build the endpoint location table from server IPs.
 
     fvpn-geolocate [--dir DIR] [--table FILE] [--all] [--delay S] [--limit N]
-                   [--dry-run]
+                   [--deadline S] [--dry-run]
 
 Resolves each .ovpn profile's `remote` host to an IP and asks ip2location.io
 where that IP is. It geolocates the SERVER, never the tunnel: nothing here
@@ -16,12 +16,18 @@ resolves to a different IP, are looked up. Pass --all to redo everything.
 The API allows 1000 queries a day unauthenticated. One call is made per unique
 IP, not per file, so the udp and tcp variants of an endpoint share a lookup —
 134 profiles cost about 67 calls. --limit caps a run regardless.
+
+Bounded in time and memory: redirects are refused so every response body is
+read under the same byte cap, each lookup has a wall-clock limit, no lookup
+starts after --deadline seconds (what is located so far is still saved), and
+the process cannot grow past MAX_MEMORY.
 """
 
 import argparse
 import json
 import os
 import re
+import resource
 import socket
 import subprocess
 import sys
@@ -33,6 +39,9 @@ from datetime import datetime, timezone
 
 API = "https://api.ip2location.io/?ip="
 MAX_BYTES = 262144          # a profile is ~4KB; bounds a swollen or endless file
+MAX_RESPONSE = 65536        # an answer is ~1KB
+LOOKUP_SECONDS = 20         # wall clock for one lookup, however the server trickles
+MAX_MEMORY = 1 << 30        # address space; the whole run needs well under 100MB
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,253}[A-Za-z0-9])?$")
 
@@ -109,12 +118,42 @@ def resolve(host):
     return ""
 
 
-def lookup(ip, timeout=20):
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects. The stock handler reads a 3xx body to the end, with no
+    byte limit, before following it, so a cap on the final read never applied
+    to it. Returning None makes urllib raise HTTPError with the body unread."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
+
+
+def lookup(ip):
     req = urllib.request.Request(API + ip, headers={"User-Agent": "fvpn-geolocate/1"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    end = time.monotonic() + LOOKUP_SECONDS
+    # The socket timeout bounds each wait; the loop bounds the total, so a body
+    # trickled a byte at a time still ends at LOOKUP_SECONDS.
+    try:
+        resp = OPENER.open(req, timeout=10)
+    except urllib.error.HTTPError as exc:
+        exc.close()
+        raise OSError(f"HTTP {exc.code}") from None
+    with resp:
         if resp.status != 200:
             raise OSError(f"HTTP {resp.status}")
-        return json.loads(resp.read(65536).decode("utf-8"))
+        body = b""
+        while len(body) < MAX_RESPONSE:
+            if time.monotonic() > end:
+                raise OSError("response too slow")
+            chunk = resp.read1(MAX_RESPONSE - len(body))
+            if not chunk:
+                break
+            body += chunk
+        else:
+            raise OSError("response too large")
+        return json.loads(body.decode("utf-8"))
 
 
 def load_table(path):
@@ -199,8 +238,12 @@ def main():
                     help="seconds between API calls (default 1.0)")
     ap.add_argument("--limit", type=int, default=900,
                     help="max API calls this run (default 900, daily cap is 1000)")
+    ap.add_argument("--deadline", type=float, default=300,
+                    help="start no lookup after this many seconds (default 300)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    started = time.monotonic()
+    resource.setrlimit(resource.RLIMIT_AS, (MAX_MEMORY, MAX_MEMORY))
 
     profile_dir = args.dir
     if not os.path.isdir(profile_dir) or os.path.islink(profile_dir):
@@ -266,6 +309,10 @@ def main():
     # ── Look up each unique IP once ─────────────────────────────────────────
     geo, failed = {}, 0
     for i, ip in enumerate(need_ips, 1):
+        if time.monotonic() - started > args.deadline:
+            print(f"stopped at the {args.deadline:g}s deadline "
+                  f"({len(need_ips) - i + 1} left for next time)", flush=True)
+            break
         try:
             data = lookup(ip)
         except (urllib.error.URLError, OSError, ValueError) as exc:

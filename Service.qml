@@ -489,9 +489,26 @@ Item {
       }
     }
     onExited: function (code) {
+      geoDeadline.stop()
       root.updating = false
-      root.updateStatus = code === 0 ? "Locations updated" : "Could not locate endpoints"
+      root.updateStatus = geoDeadline.fired ? "Locating timed out"
+                        : code === 0 ? "Locations updated" : "Could not locate endpoints"
       root.reloadGeo()
+    }
+  }
+
+  // The script starts no lookup after geoSeconds and bounds each one, so it
+  // ends by itself; this kills it if it is still running a minute later,
+  // whatever it is stuck on.
+  readonly property int geoSeconds: 300
+  Timer {
+    id: geoDeadline
+    property bool fired: false
+    interval: (root.geoSeconds + 60) * 1000
+    repeat: false
+    onTriggered: {
+      fired = true
+      geoProcess.running = false
     }
   }
 
@@ -500,9 +517,12 @@ Item {
     root.lastError = ""
     root.updating = true
     root.updateStatus = "Locating endpoints…"
-    var cmd = ["/usr/bin/python3", "-I", root.geoBin, "--dir", root.profileDir]
+    var cmd = ["/usr/bin/python3", "-I", root.geoBin, "--dir", root.profileDir,
+               "--deadline", String(root.geoSeconds)]
     if (all === true) cmd.push("--all")
     geoProcess.command = cmd
+    geoDeadline.fired = false
+    geoDeadline.restart()
     geoProcess.running = true
   }
 
