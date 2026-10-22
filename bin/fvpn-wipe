@@ -85,12 +85,14 @@ fi
 
 # ── Remove ──────────────────────────────────────────────────────────────────
 echo
-# Take any active VPN down first, or NM keeps the device and the delete leaves
-# a live tunnel behind with no connection to bring it back down.
-while IFS=: read -r uuid type; do
-    [[ "$type" == "vpn" ]] || continue
+# Take this plugin's active VPN down first, or NM keeps the device and the
+# delete leaves a live tunnel behind with no connection to bring it back down.
+# Only fvpn-* connections: another VPN the user has up is not ours to drop, and
+# dropping it would send its traffic out unprotected.
+while IFS=: read -r uuid type name; do
+    [[ "$type" == "vpn" && "$name" == fvpn-* ]] || continue
     nmcli connection down uuid "$uuid" >/dev/null 2>&1 || true
-done < <(nmcli --terse --fields UUID,TYPE connection show --active 2>/dev/null)
+done < <(nmcli --terse --fields UUID,TYPE,NAME connection show --active 2>/dev/null)
 
 deleted=0
 for c in "${conns[@]}"; do

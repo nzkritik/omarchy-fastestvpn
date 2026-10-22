@@ -3,7 +3,7 @@
 # fvpn-connect — bring up a FastestVPN NetworkManager profile
 #
 #   fvpn-connect fvpn-uk2
-#   fvpn-connect --down            disconnect any active VPN
+#   fvpn-connect --down            disconnect this plugin's active VPN
 #
 # The password is piped from the desktop keyring straight into nmcli's
 # passwd-file on stdin. It never appears in argv, never reaches a shell
@@ -128,15 +128,17 @@ diagnose() {
     fi
 }
 
-# ── Disconnect any active VPN ───────────────────────────────────────────────
+# ── Disconnect this plugin's active VPN ─────────────────────────────────────
+# Only fvpn-* connections. Another VPN the user has up is not ours to drop, and
+# dropping it would send its traffic out unprotected.
 down_active_vpns() {
-    local uuid type
-    while IFS=: read -r uuid type; do
-        [[ "$type" == "vpn" ]] || continue
+    local uuid type name
+    while IFS=: read -r uuid type name; do
+        [[ "$type" == "vpn" && "$name" == fvpn-* ]] || continue
         [[ "$uuid" == "${1:-}" ]] && continue
         nmcli connection down uuid "$uuid" >/dev/null 2>&1 \
           || die "could not disconnect the active VPN session"
-    done < <(nmcli --terse --fields UUID,TYPE connection show --active)
+    done < <(nmcli --terse --fields UUID,TYPE,NAME connection show --active)
 }
 
 if [[ "${1:-}" == "--down" ]]; then
