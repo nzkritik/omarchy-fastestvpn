@@ -27,7 +27,6 @@ TextField {
   readonly property int pasteTimeoutSec: 2
 
   readOnly: true
-  cursorVisible: activeFocus
   maximumLength: 1024
   // Qt's default context menu offers Paste; readOnly already disables it, but
   // there is nothing in it this field needs.
@@ -139,6 +138,38 @@ TextField {
     // Anything else (arrows, Home/End, Ctrl+A, Ctrl+C, Return, Tab, Escape)
     // falls through to Qt, whose readOnly handling of those never reads the
     // clipboard, or on up to the panel.
+  }
+
+  // readOnly also hides Qt's caret and keeps the arrow pointer, which makes
+  // the field look uneditable, so draw both back.
+  HoverHandler { cursorShape: Qt.IBeamCursor }
+
+  Rectangle {
+    id: caret
+    property bool blinkOn: true
+    x: field.cursorRectangle.x
+    y: field.cursorRectangle.y
+    width: Math.max(1, field.cursorRectangle.width)
+    height: field.cursorRectangle.height
+    color: field.color
+    visible: field.activeFocus && blinkOn
+
+    // Show solid after every move or edit, then blink.
+    Connections {
+      target: field
+      function onCursorPositionChanged() { caret.restart() }
+      function onTextChanged() { caret.restart() }
+      function onActiveFocusChanged() { caret.restart() }
+    }
+    function restart() { blinkOn = true; blink.restart() }
+
+    Timer {
+      id: blink
+      interval: Math.max(250, Qt.styleHints.cursorFlashTime / 2)
+      repeat: true
+      running: field.activeFocus
+      onTriggered: caret.blinkOn = !caret.blinkOn
+    }
   }
 
   Process {
