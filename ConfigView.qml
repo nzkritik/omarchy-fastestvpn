@@ -81,7 +81,7 @@ ColumnLayout {
 
         FieldLabel { text: "FASTESTVPN ACCOUNT" }
 
-        TextField {
+        SafeField {
           id: accountField
           Layout.fillWidth: true
           placeholderText: "you@example.com"
@@ -89,8 +89,8 @@ ColumnLayout {
           onEditingFinished: cfg.settingChanged("username", text.trim())
         }
 
-        // This view is built with the panel, which happens BEFORE the bar
-        // pushes shell.json settings into the service — so a one-shot
+        // This view can be built BEFORE the bar pushes shell.json settings
+        // into the service — so a one-shot
         // Component.onCompleted assignment read an empty account and the field
         // stayed blank forever. Track the value instead, but stand aside while
         // the field has focus so it never fights the user's typing.
@@ -135,7 +135,7 @@ ColumnLayout {
           Layout.fillWidth: true
           spacing: Style.space(6)
 
-          TextField {
+          SafeField {
             id: passwordField
             Layout.fillWidth: true
             echoMode: TextInput.Password
@@ -187,7 +187,7 @@ ColumnLayout {
           Item { Layout.fillWidth: true }
         }
 
-        TextField {
+        SafeField {
           id: dirField
           Layout.fillWidth: true
           placeholderText: "~/.local/share/fastestvpn/profiles"

@@ -346,7 +346,7 @@ Panel {
       }
 
       // ── Search ────────────────────────────────────────────────────────────
-      TextField {
+      SafeField {
         id: search
         visible: !root.configOpen && !root.firstRun
         Layout.fillWidth: true
@@ -714,18 +714,23 @@ Panel {
       }
 
       // ── Settings ──────────────────────────────────────────────────────────
-      ConfigView {
-        visible: root.configOpen
+      // Built only while open, so its text fields (and any half-typed
+      // password) do not outlive the screen they belong to.
+      Loader {
+        active: root.configOpen
+        visible: active
         Layout.fillWidth: true
         Layout.fillHeight: true
-        service: root.service
-        foreground: root.foreground
-        urgent: root.urgent
-        accent: root.accent
-        dim: root.dim
-        fontFamily: root.fontFamily
-        onSettingChanged: function (key, value) { root.writeSetting(key, value) }
-        onCloseRequested: root.configOpen = false
+        sourceComponent: ConfigView {
+          service: root.service
+          foreground: root.foreground
+          urgent: root.urgent
+          accent: root.accent
+          dim: root.dim
+          fontFamily: root.fontFamily
+          onSettingChanged: function (key, value) { root.writeSetting(key, value) }
+          onCloseRequested: root.configOpen = false
+        }
       }
     }
   }
